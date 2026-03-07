@@ -27,8 +27,6 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
   ],
   manager: [
     "dashboard.view",
-    "users.read",
-    "users.update_manager",
     "leads.read",
     "leads.create",
     "leads.update",
@@ -44,18 +42,26 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
     "notifications.manage",
     "activity_logs.view"
   ],
-  telecaller: [
+  sales_executive: [
     "dashboard.view",
     "leads.read",
-    "leads.create",
     "leads.update",
     "followups.read",
-    "followups.manage",
     "site_visits.read",
+    "site_visits.manage",
     "reports.view",
     "notifications.read"
   ],
-  sales_executive: [
+  view_only: [
+    "dashboard.view",
+    "leads.read",
+    "followups.read",
+    "site_visits.read",
+    "reports.view",
+    "notifications.read",
+    "activity_logs.view"
+  ],
+  telecaller: [
     "dashboard.view",
     "leads.read",
     "leads.update",

@@ -5,44 +5,38 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { createNotification } from "@/lib/notifications";
 
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
 const VISIT_STATUSES: SiteVisitStatus[] = [
   "scheduled",
   "completed",
+  "cancelled",
   "no_show",
-  "rescheduled",
-  "cancelled"
+  "rescheduled"
 ];
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request) {
   try {
     const actor = await getActorContext();
     await requirePermission(actor, "site_visits.manage");
-    const { id } = await context.params;
 
     const payload = (await request.json()) as {
-      visitDate?: string;
+      leadId?: string;
       assignedSalesUserId?: string | null;
-      pickupRequired?: boolean;
-      pickupAddress?: string;
+      visitDate?: string;
       projectName?: string;
       location?: string;
+      pickupRequired?: boolean;
+      pickupAddress?: string;
       visitStatus?: SiteVisitStatus;
       outcome?: string;
-      outcomeNote?: string;
       notes?: string;
       nextAction?: string;
       nextFollowupAt?: string;
     };
 
+    const leadId = payload.leadId?.trim();
     const visitDateInput = payload.visitDate?.trim();
-    if (!visitDateInput) {
-      return NextResponse.json({ error: "Visit date is required" }, { status: 400 });
+    if (!leadId || !visitDateInput) {
+      return NextResponse.json({ error: "Lead and visit date are required" }, { status: 400 });
     }
     const visitDate = new Date(visitDateInput);
     if (Number.isNaN(visitDate.valueOf())) {
@@ -54,50 +48,40 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Invalid visit status" }, { status: 400 });
     }
 
-    let nextFollowupAtIso: string | null = null;
+    let nextFollowupIso: string | null = null;
     if (payload.nextFollowupAt?.trim()) {
       const parsed = new Date(payload.nextFollowupAt);
       if (Number.isNaN(parsed.valueOf())) {
         return NextResponse.json({ error: "Invalid next follow-up date" }, { status: 400 });
       }
-      nextFollowupAtIso = parsed.toISOString();
+      nextFollowupIso = parsed.toISOString();
     }
 
     const admin = createAdminSupabaseClient();
-    const { data: lead, error: leadError } = await admin
+    const { data: lead } = await admin
       .from("leads")
       .select("id, company_id, assigned_to, full_name")
-      .eq("id", id)
+      .eq("id", leadId)
       .single();
-
-    if (leadError || !lead) {
+    if (!lead || lead.company_id !== actor.profile.company_id) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-    }
-    if (lead.company_id !== actor.profile.company_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const assignedSalesUserId = payload.assignedSalesUserId ?? lead.assigned_to ?? actor.profile.id;
-    const { data: assignee, error: assigneeError } = await admin
+    const { data: assignee } = await admin
       .from("user_profiles")
       .select("id, company_id, status")
       .eq("id", assignedSalesUserId)
       .single();
-    if (assigneeError || !assignee) {
-      return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
-    }
-    if (assignee.company_id !== actor.profile.company_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (assignee.status !== "active") {
-      return NextResponse.json({ error: "Assignee must be active" }, { status: 400 });
+    if (!assignee || assignee.company_id !== actor.profile.company_id || assignee.status !== "active") {
+      return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
     }
 
-    const { data: siteVisit, error: visitError } = await admin
+    const { data: siteVisit, error } = await admin
       .from("site_visits")
       .insert({
         company_id: actor.profile.company_id,
-        lead_id: id,
+        lead_id: leadId,
         assigned_sales_user_id: assignedSalesUserId,
         visit_date: visitDate.toISOString(),
         visit_status: visitStatus,
@@ -106,26 +90,25 @@ export async function POST(request: Request, context: RouteContext) {
         pickup_required: Boolean(payload.pickupRequired),
         pickup_address: payload.pickupAddress?.trim() || null,
         outcome: payload.outcome?.trim() || null,
-        outcome_note: payload.outcomeNote?.trim() || null,
         notes: payload.notes?.trim() || null,
         next_action: payload.nextAction?.trim() || null,
-        next_followup_at: nextFollowupAtIso
+        next_followup_at: nextFollowupIso
       })
       .select("id")
       .single();
-    if (visitError || !siteVisit) {
-      return NextResponse.json({ error: visitError?.message ?? "Failed to schedule site visit" }, { status: 400 });
+    if (error || !siteVisit) {
+      return NextResponse.json({ error: error?.message ?? "Failed to create site visit" }, { status: 400 });
     }
 
-    const nextStage = visitStatus === "completed" ? "visit_done" : "site_visit_planned";
     await admin
       .from("leads")
       .update({
-        pipeline_stage: nextStage,
-        next_followup_at: nextFollowupAtIso,
+        pipeline_stage: visitStatus === "completed" ? "visit_done" : "site_visit_planned",
+        next_followup_at: nextFollowupIso,
+        site_visit_interest: true,
         updated_at: new Date().toISOString()
       })
-      .eq("id", id)
+      .eq("id", leadId)
       .eq("company_id", actor.profile.company_id);
 
     await logActivity(admin, {
@@ -134,12 +117,7 @@ export async function POST(request: Request, context: RouteContext) {
       entityType: "site_visit",
       entityId: siteVisit.id,
       action: "site_visit.created",
-      description: `Site visit scheduled for ${lead.full_name}`,
-      after: {
-        assignedSalesUserId,
-        visitStatus,
-        visitDate: visitDate.toISOString()
-      }
+      description: `Site visit created for ${lead.full_name}`
     });
 
     await createNotification(admin, {
@@ -151,9 +129,9 @@ export async function POST(request: Request, context: RouteContext) {
       entityId: siteVisit.id,
       actionUrl: "/site-visits",
       title: "Site visit assigned",
-      message: `${lead.full_name} visit scheduled for ${visitDate.toLocaleString()}.`,
+      message: `${lead.full_name} site visit scheduled for ${visitDate.toLocaleString()}.`,
       payload: {
-        leadId: id,
+        leadId,
         siteVisitId: siteVisit.id
       }
     });

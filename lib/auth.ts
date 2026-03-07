@@ -33,6 +33,12 @@ const getActorContextCached = cache(async (): Promise<ActorContext> => {
     throw new Error("User profile not found");
   }
 
+  await supabase
+    .from("user_profiles")
+    .update({ last_active_at: new Date().toISOString() })
+    .eq("id", profile.id)
+    .eq("company_id", profile.company_id);
+
   return {
     userId: user.id,
     email: user.email,
@@ -42,6 +48,12 @@ const getActorContextCached = cache(async (): Promise<ActorContext> => {
 
 export async function getActorContext(): Promise<ActorContext> {
   return getActorContextCached();
+}
+
+export function requireCompanyAdmin(actor: ActorContext): void {
+  if (actor.profile.role_key !== "company_admin") {
+    throw new Error("Forbidden");
+  }
 }
 
 const getRolePermissionsCached = cache(async (roleKey: RoleKey) => {

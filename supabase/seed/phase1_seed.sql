@@ -2,8 +2,8 @@ insert into public.roles (role_key, role_name)
 values
   ('company_admin', 'Company Admin'),
   ('manager', 'Manager'),
-  ('telecaller', 'Telecaller'),
-  ('sales_executive', 'Sales Executive')
+  ('sales_executive', 'Sales Executive'),
+  ('view_only', 'View Only')
 on conflict (role_key) do update set role_name = excluded.role_name;
 
 insert into public.permissions (permission_key, description)
@@ -53,8 +53,6 @@ values
   ('company_admin', 'notifications.manage'),
   ('company_admin', 'activity_logs.view'),
   ('manager', 'dashboard.view'),
-  ('manager', 'users.read'),
-  ('manager', 'users.update_manager'),
   ('manager', 'leads.read'),
   ('manager', 'leads.create'),
   ('manager', 'leads.update'),
@@ -69,15 +67,6 @@ values
   ('manager', 'notifications.read'),
   ('manager', 'notifications.manage'),
   ('manager', 'activity_logs.view'),
-  ('telecaller', 'dashboard.view'),
-  ('telecaller', 'leads.read'),
-  ('telecaller', 'leads.create'),
-  ('telecaller', 'leads.update'),
-  ('telecaller', 'followups.read'),
-  ('telecaller', 'followups.manage'),
-  ('telecaller', 'site_visits.read'),
-  ('telecaller', 'reports.view'),
-  ('telecaller', 'notifications.read'),
   ('sales_executive', 'dashboard.view'),
   ('sales_executive', 'leads.read'),
   ('sales_executive', 'leads.update'),
@@ -85,5 +74,12 @@ values
   ('sales_executive', 'site_visits.read'),
   ('sales_executive', 'site_visits.manage'),
   ('sales_executive', 'reports.view'),
-  ('sales_executive', 'notifications.read')
+  ('sales_executive', 'notifications.read'),
+  ('view_only', 'dashboard.view'),
+  ('view_only', 'leads.read'),
+  ('view_only', 'followups.read'),
+  ('view_only', 'site_visits.read'),
+  ('view_only', 'reports.view'),
+  ('view_only', 'notifications.read'),
+  ('view_only', 'activity_logs.view')
 on conflict (role_key, permission_key) do nothing;

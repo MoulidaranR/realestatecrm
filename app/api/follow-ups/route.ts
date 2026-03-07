@@ -5,38 +5,34 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { createNotification } from "@/lib/notifications";
 
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
 const MODES: FollowUpMode[] = ["call", "whatsapp", "sms", "email", "meeting"];
 const PRIORITIES: FollowUpPriority[] = ["high", "medium", "low"];
 const STATUSES: FollowUpStatus[] = ["pending", "completed", "missed", "cancelled"];
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(request: Request) {
   try {
     const actor = await getActorContext();
     await requirePermission(actor, "followups.manage");
-    const { id } = await context.params;
 
     const payload = (await request.json()) as {
-      dueAt?: string;
-      note?: string;
+      leadId?: string;
       assignedUserId?: string | null;
+      dueAt?: string;
       mode?: FollowUpMode;
       purpose?: string;
       outcome?: string;
       priority?: FollowUpPriority;
       status?: FollowUpStatus;
-      nextFollowupAt?: string | null;
+      note?: string;
+      nextFollowupAt?: string;
     };
 
+    const leadId = payload.leadId?.trim();
     const dueAt = payload.dueAt?.trim();
-    if (!dueAt) {
-      return NextResponse.json({ error: "Due date is required" }, { status: 400 });
+    if (!leadId || !dueAt) {
+      return NextResponse.json({ error: "Lead and due date are required" }, { status: 400 });
     }
+
     const dueDate = new Date(dueAt);
     if (Number.isNaN(dueDate.valueOf())) {
       return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
@@ -46,7 +42,7 @@ export async function POST(request: Request, context: RouteContext) {
     const priority = payload.priority ?? "medium";
     const status = payload.status ?? "pending";
     if (!MODES.includes(mode) || !PRIORITIES.includes(priority) || !STATUSES.includes(status)) {
-      return NextResponse.json({ error: "Invalid follow-up values" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid follow-up options" }, { status: 400 });
     }
 
     let nextFollowupIso: string | null = null;
@@ -59,40 +55,30 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const admin = createAdminSupabaseClient();
-    const { data: lead, error: leadError } = await admin
+    const { data: lead } = await admin
       .from("leads")
       .select("id, company_id, assigned_to, full_name")
-      .eq("id", id)
+      .eq("id", leadId)
       .single();
-
-    if (leadError || !lead) {
+    if (!lead || lead.company_id !== actor.profile.company_id) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-    }
-    if (lead.company_id !== actor.profile.company_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const assignedUserId = payload.assignedUserId ?? lead.assigned_to ?? actor.profile.id;
-    const { data: assignee, error: assigneeError } = await admin
+    const { data: assignee } = await admin
       .from("user_profiles")
-      .select("id, company_id, status, full_name")
+      .select("id, company_id, status")
       .eq("id", assignedUserId)
       .single();
-    if (assigneeError || !assignee) {
-      return NextResponse.json({ error: "Assignee not found" }, { status: 404 });
-    }
-    if (assignee.company_id !== actor.profile.company_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (assignee.status !== "active") {
-      return NextResponse.json({ error: "Assignee must be active" }, { status: 400 });
+    if (!assignee || assignee.company_id !== actor.profile.company_id || assignee.status !== "active") {
+      return NextResponse.json({ error: "Invalid assignee" }, { status: 400 });
     }
 
-    const { data: followUp, error: followUpError } = await admin
+    const { data: followUp, error } = await admin
       .from("follow_ups")
       .insert({
         company_id: actor.profile.company_id,
-        lead_id: id,
+        lead_id: leadId,
         assigned_user_id: assignedUserId,
         due_at: dueDate.toISOString(),
         mode,
@@ -100,14 +86,14 @@ export async function POST(request: Request, context: RouteContext) {
         outcome: payload.outcome?.trim() || null,
         priority,
         status,
-        completed_at: status === "completed" ? new Date().toISOString() : null,
+        note: payload.note?.trim() || null,
         next_followup_at: nextFollowupIso,
-        note: payload.note?.trim() || null
+        completed_at: status === "completed" ? new Date().toISOString() : null
       })
       .select("id")
       .single();
-    if (followUpError || !followUp) {
-      return NextResponse.json({ error: followUpError?.message ?? "Failed to create follow-up" }, { status: 400 });
+    if (error || !followUp) {
+      return NextResponse.json({ error: error?.message ?? "Failed to create follow-up" }, { status: 400 });
     }
 
     await admin
@@ -117,7 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
         pipeline_stage: "follow_up_due",
         updated_at: new Date().toISOString()
       })
-      .eq("id", id)
+      .eq("id", leadId)
       .eq("company_id", actor.profile.company_id);
 
     await logActivity(admin, {
@@ -126,13 +112,7 @@ export async function POST(request: Request, context: RouteContext) {
       entityType: "follow_up",
       entityId: followUp.id,
       action: "followup.created",
-      description: `Follow-up created for ${lead.full_name}`,
-      after: {
-        assignedUserId,
-        dueAt: dueDate.toISOString(),
-        status,
-        mode
-      }
+      description: `Follow-up created for ${lead.full_name}`
     });
 
     await createNotification(admin, {
@@ -143,10 +123,10 @@ export async function POST(request: Request, context: RouteContext) {
       entityType: "follow_up",
       entityId: followUp.id,
       actionUrl: "/follow-ups",
-      title: "New follow-up assigned",
-      message: `${lead.full_name} follow-up is due at ${dueDate.toLocaleString()}.`,
+      title: "Follow-up assigned",
+      message: `${lead.full_name} follow-up scheduled for ${dueDate.toLocaleString()}.`,
       payload: {
-        leadId: id,
+        leadId,
         followUpId: followUp.id
       }
     });

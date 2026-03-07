@@ -24,14 +24,13 @@ export function Sidebar({ roleKey }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const items = BASE_ITEMS.filter((item) => {
-    if (item.href === "/users" && roleKey !== "company_admin" && roleKey !== "manager") {
+    if (item.href === "/users" && roleKey !== "company_admin") {
       return false;
     }
-    if (
-      (item.href === "/imports" || item.href === "/activity-logs") &&
-      roleKey !== "company_admin" &&
-      roleKey !== "manager"
-    ) {
+    if (item.href === "/imports" && roleKey !== "company_admin" && roleKey !== "manager") {
+      return false;
+    }
+    if (item.href === "/activity-logs" && roleKey === "sales_executive") {
       return false;
     }
     return true;

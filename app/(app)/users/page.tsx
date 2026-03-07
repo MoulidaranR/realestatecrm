@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 import { UsersPageClient } from "@/components/users-page-client";
 import type { UserProfile } from "@/lib/db-types";
-import { getActorContext, hasPermission } from "@/lib/auth";
+import { getActorContext } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function UsersPage() {
   const actor = await getActorContext();
-  const allowed = await hasPermission(actor.profile.role_key, "users.read");
-  if (!allowed) {
+  if (actor.profile.role_key !== "company_admin") {
     redirect("/dashboard");
   }
 
@@ -32,7 +31,7 @@ export default async function UsersPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Users</h1>
         <p className="text-sm text-slate-500">
-          Invite team members and manage role/status access controls.
+          Admin-only workspace user management with role, status, and reporting manager controls.
         </p>
       </div>
       <UsersPageClient

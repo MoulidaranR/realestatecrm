@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { logActivity } from "@/lib/activity";
 
 function slugify(value: string): string {
   return value
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
 
     if (!fullName || !companyName || !email || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
     if (password.length < 8) {
       return NextResponse.json(
@@ -79,7 +83,8 @@ export async function POST(request: Request) {
       full_name: fullName,
       email,
       role_key: "company_admin",
-      status: "active"
+      status: "active",
+      last_active_at: new Date().toISOString()
     });
 
     if (profileError) {
@@ -89,6 +94,22 @@ export async function POST(request: Request) {
         { error: profileError.message ?? "Failed to create user profile" },
         { status: 400 }
       );
+    }
+
+    const { data: profile } = await admin
+      .from("user_profiles")
+      .select("id")
+      .eq("auth_user_id", userId)
+      .single();
+    if (profile) {
+      await logActivity(admin, {
+        companyId: company.id,
+        actorUserId: profile.id,
+        entityType: "user",
+        entityId: profile.id,
+        action: "user.signup_company_admin",
+        description: "Company workspace created with initial company admin"
+      });
     }
 
     return NextResponse.json({ success: true });

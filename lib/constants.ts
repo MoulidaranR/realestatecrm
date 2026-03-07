@@ -1,11 +1,20 @@
 export const ROLE_KEYS = [
   "company_admin",
   "manager",
-  "telecaller",
-  "sales_executive"
+  "sales_executive",
+  "view_only",
+  // Legacy role kept for backward compatibility with older rows before migration.
+  "telecaller"
 ] as const;
 
 export type RoleKey = (typeof ROLE_KEYS)[number];
+
+export const MANAGED_ROLE_KEYS: RoleKey[] = [
+  "company_admin",
+  "manager",
+  "sales_executive",
+  "view_only"
+];
 
 export const PERMISSION_KEYS = [
   "dashboard.view",

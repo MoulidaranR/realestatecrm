@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { ROLE_KEYS, type RoleKey } from "@/lib/constants";
-import { getActorContext, requirePermission } from "@/lib/auth";
+import { MANAGED_ROLE_KEYS, type RoleKey } from "@/lib/constants";
+import { getActorContext, requireCompanyAdmin, requirePermission } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 
@@ -9,21 +9,24 @@ export async function POST(request: Request) {
   try {
     const actor = await getActorContext();
     await requirePermission(actor, "users.invite");
+    requireCompanyAdmin(actor);
 
     const payload = (await request.json()) as {
       fullName?: string;
       email?: string;
+      phone?: string;
       roleKey?: RoleKey;
     };
 
     const fullName = payload.fullName?.trim();
     const email = payload.email?.trim().toLowerCase();
+    const phone = payload.phone?.trim() || null;
     const roleKey = payload.roleKey;
 
     if (!fullName || !email || !roleKey) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    if (!ROLE_KEYS.includes(roleKey)) {
+    if (!MANAGED_ROLE_KEYS.includes(roleKey) || roleKey === "company_admin") {
       return NextResponse.json({ error: "Invalid role key" }, { status: 400 });
     }
 
@@ -45,6 +48,7 @@ export async function POST(request: Request) {
         company_id: actor.profile.company_id,
         full_name: fullName,
         email,
+        phone,
         role_key: roleKey,
         status: "invited"
       },

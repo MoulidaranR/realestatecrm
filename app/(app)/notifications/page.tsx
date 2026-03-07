@@ -11,7 +11,9 @@ export default async function NotificationsPage() {
   const supabase = await createServerSupabaseClient();
   let query = supabase
     .from("notifications")
-    .select("id, event_type, title, message, is_read, created_at")
+    .select(
+      "id, notification_type, event_type, entity_type, entity_id, action_url, title, message, payload_json, is_read, created_at"
+    )
     .eq("company_id", actor.profile.company_id)
     .order("created_at", { ascending: false })
     .limit(200);

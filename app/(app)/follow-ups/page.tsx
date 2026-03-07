@@ -8,27 +8,31 @@ export default async function FollowUpsPage() {
   await requirePermission(actor, "followups.read");
 
   const supabase = await createServerSupabaseClient();
-  const { data: followUps } = await supabase
-    .from("follow_ups")
-    .select("id, lead_id, assigned_user_id, due_at, status, note, created_at")
-    .eq("company_id", actor.profile.company_id)
-    .order("due_at", { ascending: true })
-    .limit(300);
-
-  const leadIds = Array.from(new Set((followUps ?? []).map((item) => item.lead_id)));
-  const userIds = Array.from(new Set((followUps ?? []).map((item) => item.assigned_user_id)));
-
-  const [{ data: leads }, { data: users }, canManage] = await Promise.all([
-    leadIds.length
-      ? supabase.from("leads").select("id, full_name").in("id", leadIds)
-      : Promise.resolve({ data: [] as Array<Pick<Lead, "id" | "full_name">> }),
-    userIds.length
-      ? supabase.from("user_profiles").select("id, full_name").in("id", userIds)
-      : Promise.resolve({ data: [] as Array<Pick<UserProfile, "id" | "full_name">> }),
+  const [{ data: followUps }, { data: leads }, { data: users }, canManage] = await Promise.all([
+    supabase
+      .from("follow_ups")
+      .select(
+        "id, lead_id, assigned_user_id, due_at, status, mode, purpose, outcome, priority, note, next_followup_at, created_at, completed_at"
+      )
+      .eq("company_id", actor.profile.company_id)
+      .order("due_at", { ascending: true })
+      .limit(500),
+    supabase
+      .from("leads")
+      .select("id, full_name, phone, city, source_platform, lead_priority")
+      .eq("company_id", actor.profile.company_id)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabase
+      .from("user_profiles")
+      .select("id, full_name, role_key, status")
+      .eq("company_id", actor.profile.company_id)
+      .eq("status", "active")
+      .order("full_name", { ascending: true }),
     hasPermission(actor.profile.role_key, "followups.manage")
   ]);
 
-  const leadMap = new Map((leads ?? []).map((lead) => [lead.id, lead.full_name]));
+  const leadMap = new Map((leads ?? []).map((lead) => [lead.id, lead]));
   const userMap = new Map((users ?? []).map((user) => [user.id, user.full_name]));
 
   return (
@@ -36,15 +40,33 @@ export default async function FollowUpsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Follow-ups</h1>
         <p className="text-sm text-slate-500">
-          Task-first view for today, overdue, and upcoming follow-ups.
+          Create and manage follow-up cycles with outcomes, priorities, and one-click rescheduling.
         </p>
       </div>
       <FollowUpsTable
-        initialFollowUps={(followUps ?? []).map((item) => ({
-          ...item,
-          lead_name: leadMap.get(item.lead_id) ?? "Unknown lead",
-          assignee_name: userMap.get(item.assigned_user_id) ?? "Unknown user"
+        initialFollowUps={(followUps ?? []).map((item) => {
+          const lead = leadMap.get(item.lead_id) as Lead | undefined;
+          return {
+            ...item,
+            lead_name: lead?.full_name ?? "Unknown lead",
+            lead_phone: lead?.phone ?? "-",
+            lead_city: lead?.city ?? "Unknown",
+            lead_source_platform: lead?.source_platform ?? "unknown",
+            lead_priority: lead?.lead_priority ?? "warm",
+            assignee_name: userMap.get(item.assigned_user_id) ?? "Unknown user"
+          };
+        })}
+        leads={(leads ?? []).map((lead) => ({
+          id: lead.id,
+          full_name: lead.full_name,
+          phone: lead.phone,
+          city: lead.city,
+          source_platform: lead.source_platform,
+          lead_priority: lead.lead_priority
         }))}
+        users={(users ?? []) as Array<
+          Pick<UserProfile, "id" | "full_name" | "role_key" | "status">
+        >}
         canManage={canManage}
       />
     </div>

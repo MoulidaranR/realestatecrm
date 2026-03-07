@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -46,12 +47,29 @@ export async function POST(request: Request) {
     .update({
       auth_user_id: user.id,
       full_name: fullName,
-      status: "active"
+      status: "active",
+      last_active_at: new Date().toISOString()
     })
     .eq("id", targetProfileId);
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
+  }
+
+  const { data: profile } = await admin
+    .from("user_profiles")
+    .select("id, company_id")
+    .eq("id", targetProfileId)
+    .single();
+  if (profile) {
+    await logActivity(admin, {
+      companyId: profile.company_id,
+      actorUserId: profile.id,
+      entityType: "user",
+      entityId: profile.id,
+      action: "user.invite_accepted",
+      description: "User completed invite onboarding"
+    });
   }
 
   return NextResponse.json({ success: true });

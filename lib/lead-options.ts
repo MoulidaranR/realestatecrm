@@ -1,4 +1,12 @@
-import type { FollowUpStatus, PipelineStage, SiteVisitStatus } from "@/lib/db-types";
+import type {
+  FollowUpMode,
+  FollowUpPriority,
+  FollowUpStatus,
+  LeadPriority,
+  PipelineStage,
+  SiteVisitStatus,
+  SourcePlatform
+} from "@/lib/db-types";
 
 export const PIPELINE_STAGES: PipelineStage[] = [
   "new",
@@ -13,7 +21,30 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   "lost"
 ];
 
-export const FOLLOW_UP_STATUSES: FollowUpStatus[] = ["pending", "completed", "cancelled"];
+export const LEAD_PRIORITIES: LeadPriority[] = ["hot", "warm", "cold"];
+
+export const SOURCE_PLATFORMS: SourcePlatform[] = [
+  "manual",
+  "website",
+  "99acres",
+  "magicbricks",
+  "facebook",
+  "instagram",
+  "google_ads",
+  "referral",
+  "walk_in",
+  "other"
+];
+
+export const FOLLOW_UP_STATUSES: FollowUpStatus[] = [
+  "pending",
+  "completed",
+  "missed",
+  "cancelled"
+];
+
+export const FOLLOW_UP_MODES: FollowUpMode[] = ["call", "whatsapp", "sms", "email", "meeting"];
+export const FOLLOW_UP_PRIORITIES: FollowUpPriority[] = ["high", "medium", "low"];
 
 export const SITE_VISIT_STATUSES: SiteVisitStatus[] = [
   "scheduled",

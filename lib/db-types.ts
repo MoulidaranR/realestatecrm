@@ -13,6 +13,7 @@ export type UserProfile = {
   manager_user_id: string | null;
   status: UserStatus;
   created_at: string;
+  last_active_at: string;
 };
 
 export type Company = {
@@ -40,10 +41,25 @@ export type PipelineStage =
 
 export type LeadStatus = "open" | "won" | "lost" | "cold";
 
+export type BuyingPurpose = "self_use" | "investment";
+export type SourcePlatform =
+  | "manual"
+  | "website"
+  | "99acres"
+  | "magicbricks"
+  | "facebook"
+  | "instagram"
+  | "google_ads"
+  | "referral"
+  | "walk_in"
+  | "other";
+export type LeadPriority = "hot" | "warm" | "cold";
+
 export type Lead = {
   id: string;
   company_id: string;
   created_by: string;
+  captured_by: string;
   assigned_to: string | null;
   full_name: string;
   phone: string;
@@ -54,7 +70,11 @@ export type Lead = {
   budget_min: number | null;
   budget_max: number | null;
   property_type: string | null;
+  buying_purpose: BuyingPurpose | null;
+  source_platform: SourcePlatform;
+  source_campaign: string | null;
   source: string;
+  lead_priority: LeadPriority;
   pipeline_stage: PipelineStage;
   lead_status: LeadStatus;
   score: number;
@@ -62,12 +82,25 @@ export type Lead = {
   last_scored_at: string | null;
   next_followup_at: string | null;
   last_contacted_at: string | null;
+  bhk_preference: string | null;
+  possession_timeline: string | null;
+  financing_needed: boolean;
+  loan_status: string | null;
+  site_visit_interest: boolean;
+  occupation: string | null;
+  company_name: string | null;
+  family_size: number | null;
+  preferred_contact_time: string | null;
+  tags: string[];
+  requirements_summary: string | null;
   notes_summary: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type FollowUpStatus = "pending" | "completed" | "cancelled";
+export type FollowUpStatus = "pending" | "completed" | "missed" | "cancelled";
+export type FollowUpMode = "call" | "whatsapp" | "sms" | "email" | "meeting";
+export type FollowUpPriority = "low" | "medium" | "high";
 
 export type FollowUp = {
   id: string;
@@ -76,6 +109,12 @@ export type FollowUp = {
   assigned_user_id: string;
   due_at: string;
   status: FollowUpStatus;
+  mode: FollowUpMode;
+  purpose: string | null;
+  outcome: string | null;
+  priority: FollowUpPriority;
+  next_followup_at: string | null;
+  completed_at: string | null;
   reminder_sent: boolean;
   note: string | null;
   created_at: string;
@@ -95,7 +134,14 @@ export type SiteVisit = {
   assigned_sales_user_id: string;
   visit_date: string;
   visit_status: SiteVisitStatus;
+  project_name: string | null;
+  location: string | null;
   pickup_required: boolean;
+  pickup_address: string | null;
+  outcome: string | null;
+  notes: string | null;
+  next_action: string | null;
+  next_followup_at: string | null;
   outcome_note: string | null;
   created_at: string;
 };
@@ -124,13 +170,23 @@ export type Deal = {
 };
 
 export type NotificationChannel = "in_app" | "email";
+export type NotificationType =
+  | "assignment"
+  | "reminder"
+  | "status_change"
+  | "user_management"
+  | "system";
 
 export type Notification = {
   id: string;
   company_id: string;
   user_profile_id: string;
   channel: NotificationChannel;
+  notification_type: NotificationType;
   event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  action_url: string | null;
   title: string;
   message: string;
   payload_json: Record<string, unknown>;
@@ -147,6 +203,8 @@ export type ActivityLog = {
   action: string;
   description: string;
   metadata_json: Record<string, unknown>;
+  before_json: Record<string, unknown>;
+  after_json: Record<string, unknown>;
   created_at: string;
 };
 

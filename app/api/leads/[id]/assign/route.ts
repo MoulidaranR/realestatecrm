@@ -22,7 +22,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const admin = createAdminSupabaseClient();
     const { data: lead, error: leadError } = await admin
       .from("leads")
-      .select("id, company_id")
+      .select("id, company_id, assigned_to, full_name")
       .eq("id", id)
       .single();
 
@@ -68,6 +68,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       description: assigneeUserId ? `Lead assigned to ${assigneeUserId}` : "Lead unassigned",
       metadata: {
         assigneeUserId
+      },
+      before: {
+        assignedTo: lead.assigned_to
+      },
+      after: {
+        assignedTo: assigneeUserId
       }
     });
 
@@ -75,9 +81,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       await createNotification(admin, {
         companyId: actor.profile.company_id,
         userProfileId: assigneeUserId,
+        notificationType: "assignment",
         eventType: "lead.assigned",
+        entityType: "lead",
+        entityId: id,
+        actionUrl: `/leads/${id}`,
         title: "New lead assigned",
-        message: "A lead has been assigned to you.",
+        message: `${lead.full_name} has been assigned to you.`,
         payload: {
           leadId: id
         }

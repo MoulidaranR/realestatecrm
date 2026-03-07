@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getActorContext, requirePermission } from "@/lib/auth";
+import { getActorContext, requireCompanyAdmin, requirePermission } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { createNotification } from "@/lib/notifications";
@@ -14,6 +14,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const actor = await getActorContext();
     await requirePermission(actor, "users.update_manager");
+    requireCompanyAdmin(actor);
     const { id } = await context.params;
 
     const payload = (await request.json()) as { managerUserId?: string | null };
@@ -28,7 +29,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const admin = createAdminSupabaseClient();
     const { data: target, error: targetError } = await admin
       .from("user_profiles")
-      .select("id, company_id")
+      .select("id, company_id, manager_user_id, full_name")
       .eq("id", id)
       .single();
 
@@ -75,9 +76,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       entityId: id,
       action: "user.manager_assigned",
       description: managerUserId
-        ? `Manager assigned: ${managerUserId}`
+        ? `${target.full_name} manager assigned`
         : "Manager assignment cleared",
       metadata: {
+        managerUserId
+      },
+      before: {
+        managerUserId: target.manager_user_id
+      },
+      after: {
         managerUserId
       }
     });
@@ -87,6 +94,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         companyId: actor.profile.company_id,
         userProfileId: id,
         eventType: "user.manager_assigned",
+        notificationType: "user_management",
+        entityType: "user",
+        entityId: id,
+        actionUrl: "/users",
         title: "Reporting manager updated",
         message: "Your manager assignment has been updated.",
         payload: {

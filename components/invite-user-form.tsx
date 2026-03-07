@@ -7,12 +7,13 @@ type InviteUserFormProps = {
   onCreated: () => void;
 };
 
-const ROLE_OPTIONS: RoleKey[] = ["manager", "telecaller", "sales_executive"];
+const ROLE_OPTIONS: RoleKey[] = ["manager", "sales_executive", "view_only"];
 
 export function InviteUserForm({ onCreated }: InviteUserFormProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [roleKey, setRoleKey] = useState<RoleKey>("telecaller");
+  const [phone, setPhone] = useState("");
+  const [roleKey, setRoleKey] = useState<RoleKey>("sales_executive");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -28,7 +29,7 @@ export function InviteUserForm({ onCreated }: InviteUserFormProps) {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ fullName, email, roleKey })
+      body: JSON.stringify({ fullName, email, phone, roleKey })
     });
 
     const payload = (await response.json()) as { error?: string };
@@ -41,15 +42,16 @@ export function InviteUserForm({ onCreated }: InviteUserFormProps) {
     setSuccess("Invite sent");
     setFullName("");
     setEmail("");
-    setRoleKey("telecaller");
+    setPhone("");
+    setRoleKey("sales_executive");
     setLoading(false);
     onCreated();
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Invite employee</h3>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Invite Team Member</h3>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <input
           placeholder="Full name"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
@@ -64,6 +66,12 @@ export function InviteUserForm({ onCreated }: InviteUserFormProps) {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
+        />
+        <input
+          placeholder="Phone (optional)"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
         />
         <select
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"

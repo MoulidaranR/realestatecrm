@@ -215,21 +215,26 @@ export function LeadDetailClient({
             <h2 className="text-xl font-bold text-slate-900">{lead.full_name}</h2>
             <p className="text-sm text-slate-600">
               {lead.phone}
-              {lead.email ? ` • ${lead.email}` : ""}
-              {lead.city ? ` • ${lead.city}` : ""}
+              {lead.email ? ` | ${lead.email}` : ""}
+              {lead.city ? ` | ${lead.city}` : ""}
             </p>
             <p className="mt-2 text-xs text-slate-500">
               Stage: {formatStageLabel(lead.pipeline_stage)} | Status: {lead.lead_status} | Score:{" "}
               {lead.score}
             </p>
             <p className="text-xs text-slate-500">
-              Created by: {lead.creator_name ?? "Unknown"} | Source: {lead.source}
+              Created by: {lead.creator_name ?? "Unknown"} | Source: {lead.source_platform}
+            </p>
+            <p className="text-xs text-slate-500">
+              Priority: {lead.lead_priority} | Budget: {lead.budget_min ?? 0} - {lead.budget_max ?? 0}
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
             <p>Assigned to: {lead.assignee_name ?? "Unassigned"}</p>
             <p>Next follow-up: {formatDateTime(lead.next_followup_at)}</p>
             <p>Last contacted: {formatDateTime(lead.last_contacted_at)}</p>
+            <p>BHK: {lead.bhk_preference ?? "-"}</p>
+            <p>Possession: {lead.possession_timeline ?? "-"}</p>
           </div>
         </div>
       </section>
@@ -524,3 +529,4 @@ export function LeadDetailClient({
     </div>
   );
 }
+

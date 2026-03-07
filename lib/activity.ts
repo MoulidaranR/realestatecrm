@@ -8,6 +8,8 @@ type LogActivityInput = {
   action: string;
   description: string;
   metadata?: Record<string, unknown>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
 };
 
 export async function logActivity(
@@ -21,6 +23,8 @@ export async function logActivity(
     entity_id: input.entityId ?? null,
     action: input.action,
     description: input.description,
-    metadata_json: input.metadata ?? {}
+    metadata_json: input.metadata ?? {},
+    before_json: input.before ?? {},
+    after_json: input.after ?? {}
   });
 }
