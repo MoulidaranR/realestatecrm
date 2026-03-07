@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sparkle SaaS Admin Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#7C3AED",
+                        "background-light": "#F9FAFB",
+                        "background-dark": "#0F172A",
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#1E293B",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                        body: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "12px",
+                    },
+                },
+            },
+        };
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #334155;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex">
+<aside class="w-64 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 bg-white dark:bg-card-dark hidden lg:flex flex-col">
+<div class="p-6 flex items-center gap-3">
+<div class="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-xl">
+<span class="material-icons-outlined text-primary text-2xl">auto_awesome</span>
+</div>
+<span class="text-2xl font-bold tracking-tight text-slate-800 dark:text-white">Sparkle</span>
+</div>
+<nav class="flex-1 px-4 py-4 space-y-8">
+<div>
+<h3 class="px-4 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Inbox</h3>
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 bg-primary/5 text-primary rounded-xl font-medium" href="#">
+<span class="material-icons-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">add_circle_outline</span>
+<span>New</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">person_outline</span>
+<span>Assigned to me</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">alternate_email</span>
+<span>Mentioned</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">star_border</span>
+<span>Favourite</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">check_circle_outline</span>
+<span>Closed</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">edit</span>
+<span>Drafts</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" href="#">
+<span class="material-icons-outlined text-[20px]">snooze</span>
+<span>Snoozed</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<div class="p-6 border-t border-slate-100 dark:border-slate-800">
+<button class="flex items-center gap-3 w-full px-4 py-2.5 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors" onclick="toggleDarkMode()">
+<span class="material-icons-outlined text-[20px] dark:hidden">dark_mode</span>
+<span class="material-icons-outlined text-[20px] hidden dark:block">light_mode</span>
+<span class="dark:hidden">Dark Mode</span>
+<span class="hidden dark:block">Light Mode</span>
+</button>
+</div>
+</aside>
+<main class="flex-1 overflow-y-auto">
+<header class="h-16 flex items-center justify-between px-8 bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md sticky top-0 z-10">
+<div class="flex flex-col">
+<h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-baseline gap-1">
+                    Hi <span class="text-primary">Nimi,</span>
+</h1>
+<p class="text-slate-400 dark:text-slate-500 text-sm">It's looking like a slow day.</p>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+<span class="material-icons-outlined">search</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full relative">
+<span class="material-icons-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
+</button>
+<div class="h-8 w-px bg-slate-200 dark:border-slate-800 mx-2"></div>
+<div class="flex items-center gap-3 cursor-pointer">
+<img alt="Nimi Martins" class="w-9 h-9 rounded-full object-cover ring-2 ring-primary/20" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtI8B3QOHP3P4cfVGZz1cfOldG07VL5610N_W3g-L8Yxf1ZihNubLIXnoM3sR5Oi2mx0iYK__48pYSjfkl0GwLRJhuDcKXC5ztozSy-VIPluMT9T3L0w727mvFrKtrSUyyyV69Zn4xF7ctQJsK25y8vhZOiCePAvMW2iajLOrvIFI-C_Y266k4whI-WQPChZVolBXENwHL1W3SN_89fMPP3OUWUr67Pc6nGLfr2h0n6YcxI0AMKwtA2P2j8WGrmsyed_Ek_AYiyaU"/>
+<span class="material-icons-outlined text-slate-400 text-xl">expand_more</span>
+</div>
+</div>
+</header>
+<div class="p-8 space-y-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="bg-card-light dark:bg-card-dark p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+<div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
+<span class="material-icons-outlined text-blue-500">inventory_2</span>
+</div>
+<div>
+<p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Unassigned</p>
+<h4 class="text-2xl font-bold text-slate-800 dark:text-white" id="metric-unassigned">350</h4>
+</div>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+<div class="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
+<span class="material-icons-outlined text-purple-500">person</span>
+</div>
+<div>
+<p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Assigned</p>
+<h4 class="text-2xl font-bold text-slate-800 dark:text-white" id="metric-assigned">450</h4>
+</div>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+<div class="w-12 h-12 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
+<span class="material-icons-outlined text-green-500">task_alt</span>
+</div>
+<div>
+<p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Closed</p>
+<h4 class="text-2xl font-bold text-slate-800 dark:text-white" id="metric-closed">3500</h4>
+</div>
+</div>
+<div class="bg-card-light dark:bg-card-dark p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+<div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center">
+<span class="material-icons-outlined text-indigo-500">forum</span>
+</div>
+<div>
+<p class="text-slate-400 dark:text-slate-500 text-sm font-medium">Channels</p>
+<h4 class="text-2xl font-bold text-slate-800 dark:text-white" id="metric-channels">3</h4>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<div class="lg:col-span-8 bg-card-light dark:bg-card-dark p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex justify-between items-center mb-8">
+<div class="flex items-center gap-2 cursor-pointer group">
+<h3 class="text-xl font-bold text-slate-800 dark:text-white" id="chart-title">Today</h3>
+<span class="material-icons-outlined text-slate-400 group-hover:text-primary transition-colors">keyboard_arrow_down</span>
+</div>
+<div class="flex items-center gap-4 text-xs font-medium">
+<label class="sr-only" for="chart-period">Chart period</label>
+<select class="text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/40" id="chart-period">
+<option value="today">Today</option>
+<option value="week">This Week</option>
+<option value="month">This Month</option>
+</select>
+<button class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" id="refresh-chart" type="button">
+<span class="material-icons-outlined text-sm">refresh</span>
+Refresh
+</button>
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+<span class="text-slate-500 dark:text-slate-400">Today</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+<span class="text-slate-400 dark:text-slate-500">Yesterday</span>
+</div>
+</div>
+</div>
+<div class="chart-container flex items-end justify-between px-2 pt-4 relative">
+<div class="absolute inset-0 bg-white/80 dark:bg-slate-900/70 backdrop-blur-[1px] rounded-xl hidden items-center justify-center z-20" id="chart-loading">
+<div class="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
+<span class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
+Loading chart data...
+</div>
+</div>
+<div class="absolute inset-x-0 bottom-0 h-full flex flex-col justify-between pointer-events-none">
+<div class="w-full border-t border-slate-100 dark:border-slate-800/50"></div>
+<div class="w-full border-t border-slate-100 dark:border-slate-800/50"></div>
+<div class="w-full border-t border-slate-100 dark:border-slate-800/50"></div>
+<div class="w-full border-t border-slate-100 dark:border-slate-800/50"></div>
+<div class="w-full border-t border-slate-100 dark:border-slate-800/50"></div>
+</div>
+<svg class="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 800 200">
+<path class="text-slate-200 dark:text-slate-700" d="" fill="none" id="yesterday-path" stroke="currentColor" stroke-width="2"></path>
+<path class="text-primary" d="" fill="none" id="today-path" stroke="currentColor" stroke-width="3"></path>
+</svg>
+<div class="absolute left-1/2 top-1/4 -translate-x-1/2 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-xl p-3 rounded-lg z-10 text-[10px]">
+<p class="text-slate-400 dark:text-slate-500" id="tooltip-today-label">Today</p>
+<p class="text-slate-800 dark:text-white font-bold mb-1" id="tooltip-today-value">25</p>
+<p class="text-slate-400 dark:text-slate-500" id="tooltip-yesterday-label">Yesterday</p>
+<p class="text-slate-800 dark:text-white font-bold" id="tooltip-yesterday-value">23</p>
+</div>
+</div>
+<div class="flex justify-between mt-6 px-2 text-[10px] text-slate-400 font-medium" id="chart-labels"></div>
+</div>
+<div class="lg:col-span-4 bg-card-light dark:bg-card-dark p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
+<div class="flex justify-between items-center mb-8">
+<h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Leaderboard</h3>
+<span class="material-icons-outlined text-primary">calendar_today</span>
+</div>
+<div class="text-center mb-8">
+<h2 class="text-xl font-bold text-primary mb-6">Most Sales</h2>
+<div class="relative inline-block">
+<img alt="Sarah Martins" class="w-24 h-24 rounded-full object-cover ring-4 ring-primary/10 mx-auto" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRQLjytQPok5w8jwOCQF3GOVPT7bRyh2gfYpz5MwmLZBbHjH1lLn1_W89KwtDmam3LK2PAALWIzETmk8AjdL9mpTJ04jwSHXYFOLHJBdzaQNA1Cg0-Bc5-JH2nNP7_iTdgNqUuTbT69NWaay3WID7T8v4By2G_LpBNQwPxI6ZYjLIc_jRjnG5Y4YmdYRyL2YgWumZ-zWocCADWlQFxvO1iLA2TWU6UzbfwoiuXi6eMljzs9o1SEP1RisYlwMgFXUdPQVISS5pyueA"/>
+<div class="absolute bottom-0 right-0 bg-primary text-white p-1 rounded-full border-2 border-white dark:border-card-dark">
+<span class="material-icons-outlined text-sm">emoji_events</span>
+</div>
+</div>
+<h4 class="mt-4 font-bold text-slate-800 dark:text-white">Sarah Martins</h4>
+<p class="text-2xl font-black text-primary mt-1">50,000</p>
+</div>
+<div class="space-y-3">
+<div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl flex items-center gap-3">
+<span class="text-[10px] font-bold text-slate-400 w-6">2ND</span>
+<img alt="Nimi Martins" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVpEdxG24rRVDwtKun-udFPE6F-QcS8FatUzVKQyyvzZkoGb3_0wmyKrVwantHJKAdHip9YzTtPVvRZ_x_iu_Nwqw228rBaoT81D_ySouJF-P3h9giMxEofyw8NqxTQHemApSl-l-3efE3y1vS0b2s60n8YvBcaWrFtPRu8Zo8oUZMQ0ANaNwEmU7c6Fjhyol5WfqTdvghHYt38t3ZPHMRezxZ_HoVVRQ6wWzvHo9i5OGIOhrVxTE6K0Nb_iUgS2abmcgPmU6swxI"/>
+<span class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1">Nimi Martins</span>
+<span class="text-sm font-bold text-primary">2300</span>
+</div>
+<div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl flex items-center gap-3">
+<span class="text-[10px] font-bold text-slate-400 w-6">3RD</span>
+<img alt="Yomi Ndu" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ92aHuX4JB_X9PPdZniA-XcYUt_-oCpa4NqNwp7X4cWi2hv6CrGOUSV_cqI2HrYnPcxGAoyaFuGgAFUjrFeANPiZz0SQi-mcwESIFbAzhLjwAo1v_xeIf2cBa2od3bxsTBRNgZUcPeFVyxFeHu6TrFEefxQ7FEaFo5H-jULN2f_f7xT22EOYvlgfg8XMUgEIqfoBaJkUwPu6Wfbvn2A2MOQNbI9l_RWMaEFNNfhAtB5KkJdROTnYD9aNBktM6CZHY72wjIa8O0Qg"/>
+<span class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1">Yomi Ndu</span>
+<span class="text-sm font-bold text-primary">2300</span>
+</div>
+<div class="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl flex items-center gap-3">
+<span class="text-[10px] font-bold text-slate-400 w-6">4TH</span>
+<img alt="Akin Siyanbola" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbI67b1vP539rmIqEU5mhZfo6UKu3FGhdPBmcX0gJHROVoaVYP75hREqnEmOnm7edrQFY16mYuG0DFMh6_BOD5irRA2q1IPYJJ-cSVtEOdvX5YiaS-TP53ANj-xvPnD5Y1x_R92wif3KLq1_Y2w9QsGgs5LfzpzBfo2-tpbXeaLlZww14E89xz3U0Yu47mZHHWst1qyzia9WaSLge2UE7TPJUzkAdsO1Nnj4Bn0wvq4tUmxKzAwXq0-7HTBW5R_rLBaJUj1PVt8Og"/>
+<span class="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1">Akin Siyanbola</span>
+<span class="text-sm font-bold text-primary">2300</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-card-light dark:bg-card-dark rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+<div class="p-6 border-b border-slate-100 dark:border-slate-800">
+<h3 class="text-lg font-bold text-slate-800 dark:text-white">Teammates performance</h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+<th class="px-8 py-4">Teammates</th>
+<th class="px-8 py-4">Assigned conversations</th>
+<th class="px-8 py-4">Closed conversations</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+<td class="px-8 py-5">
+<div class="flex items-center gap-3">
+<img alt="Nimi Martins" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxp_xEcd3Sin2L92UJ38OU9JZM8Hog2a7dRNX1wasFqpmZu-p-3ecNVBLzRhZEV0_-C-rVmMjEeorSDtEzELKQUZ4aBY7Fu4Y7w7qWWmcrrFLgFofBX-R3vIJCNce2VhC62sEGV14OZjWJq8tjYes0wQafb6xAFMawKg7HG_1neBpTMi6ibufGyzwlDgjDtoNbbwbcVI-x8MXlawiiOjxKb9wsW4k4WKtrQMyHKuJ6gPOe_BMGPSWuXzfjTVazqWG0EBRQ0jrpiR4"/>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Nimi Martins</span>
+</div>
+</td>
+<td class="px-8 py-5 text-sm font-semibold text-slate-700 dark:text-slate-200">34</td>
+<td class="px-8 py-5 text-sm font-semibold text-slate-700 dark:text-slate-200">30</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+<td class="px-8 py-5">
+<div class="flex items-center gap-3">
+<img alt="Collins Iheagwara" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCeV2dVuIjgHtXkg-mTcxNzd-olxECwe-Qmhxx0RzaGjSwnjpAaMx-U9euge9qOImtTUVITIwJafNjixQSwiBeIjUVAdRcGTrdDqKl6uGs017PplSuPdLC3rSu8rctxSZ_MKHlXXACkafBVWPj7dS6E7F8ZHYoTXe_t39ylW8SR8vYpC6gGSmpRy64O6cBQcFeboZcJ6S5TlbTKmtGvy2RMxJjl57UElpYEeJyYdyEZVYfno7hlN6JQGsZsg7oe6JIRj-dwu4FP4Ww"/>
+<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Collins Iheagwara</span>
+</div>
+</td>
+<td class="px-8 py-5 text-sm font-semibold text-slate-700 dark:text-slate-200">34</td>
+<td class="px-8 py-5 text-sm font-semibold text-slate-700 dark:text-slate-200">34</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+<script>
+    const dashboardData = {
+        today: {
+            title: "Today",
+            legendCurrent: "Today",
+            legendPrevious: "Yesterday",
+            labels: [
+                ["10:23 PM", "10/11"], ["10:30 PM", "10/11"], ["10:40 PM", "10/11"],
+                ["10:50 PM", "10/11"], ["11:00 PM", "10/11"], ["11:10 PM", "10/11"],
+                ["11:20 PM", "10/11"], ["11:30 PM", "10/11"], ["11:40 PM", "10/11"]
+            ],
+            todaySeries: [18, 22, 25, 28, 33, 29, 31, 35, 32],
+            previousSeries: [14, 16, 17, 19, 23, 22, 21, 22, 24],
+            highlightIndex: 4,
+            metrics: { unassigned: 350, assigned: 450, closed: 3500, channels: 3 }
+        },
+        week: {
+            title: "This Week",
+            legendCurrent: "This Week",
+            legendPrevious: "Last Week",
+            labels: [
+                ["Mon", "W1"], ["Tue", "W1"], ["Wed", "W1"], ["Thu", "W1"],
+                ["Fri", "W1"], ["Sat", "W1"], ["Sun", "W1"], ["Mon", "W2"], ["Tue", "W2"]
+            ],
+            todaySeries: [26, 32, 28, 38, 42, 36, 40, 45, 48],
+            previousSeries: [20, 24, 23, 30, 35, 31, 33, 36, 37],
+            highlightIndex: 8,
+            metrics: { unassigned: 292, assigned: 521, closed: 3880, channels: 4 }
+        },
+        month: {
+            title: "This Month",
+            legendCurrent: "This Month",
+            legendPrevious: "Last Month",
+            labels: [
+                ["Wk 1", "Oct"], ["Wk 2", "Oct"], ["Wk 3", "Oct"], ["Wk 4", "Oct"],
+                ["Wk 1", "Nov"], ["Wk 2", "Nov"], ["Wk 3", "Nov"], ["Wk 4", "Nov"], ["Wk 1", "Dec"]
+            ],
+            todaySeries: [120, 132, 128, 145, 154, 166, 172, 181, 196],
+            previousSeries: [103, 110, 116, 124, 136, 141, 149, 155, 163],
+            highlightIndex: 8,
+            metrics: { unassigned: 261, assigned: 603, closed: 4205, channels: 6 }
+        }
+    };
+
+    function buildLinePath(values, width, height) {
+        const maxValue = Math.max(...values);
+        const padding = 14;
+        return values.map(function (value, index) {
+            const x = (index / (values.length - 1)) * width;
+            const usableHeight = height - padding * 2;
+            const y = height - padding - (value / maxValue) * usableHeight;
+            return (index === 0 ? "M" : "L") + x.toFixed(2) + "," + y.toFixed(2);
+        }).join(" ");
+    }
+
+    function setChartLabels(labels) {
+        const labelsContainer = document.getElementById("chart-labels");
+        labelsContainer.innerHTML = labels.map(function (pair) {
+            return '<div class="flex flex-col items-center"><span>' + pair[0] + '</span><span>' + pair[1] + '</span></div>';
+        }).join("");
+    }
+
+    function setMetricCards(metrics) {
+        document.getElementById("metric-unassigned").textContent = String(metrics.unassigned);
+        document.getElementById("metric-assigned").textContent = String(metrics.assigned);
+        document.getElementById("metric-closed").textContent = String(metrics.closed);
+        document.getElementById("metric-channels").textContent = String(metrics.channels);
+    }
+
+    function showChartLoading(show) {
+        const loader = document.getElementById("chart-loading");
+        loader.classList.toggle("hidden", !show);
+        loader.classList.toggle("flex", show);
+    }
+
+    function fetchDashboardData(periodKey) {
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve(dashboardData[periodKey]);
+            }, 500);
+        });
+    }
+
+    function renderChart(data) {
+        const chartWidth = 800;
+        const chartHeight = 200;
+        const todayPath = document.getElementById("today-path");
+        const previousPath = document.getElementById("yesterday-path");
+        const chartTitle = document.getElementById("chart-title");
+        const todayLabel = document.getElementById("tooltip-today-label");
+        const yesterdayLabel = document.getElementById("tooltip-yesterday-label");
+        const todayValue = document.getElementById("tooltip-today-value");
+        const yesterdayValue = document.getElementById("tooltip-yesterday-value");
+
+        todayPath.setAttribute("d", buildLinePath(data.todaySeries, chartWidth, chartHeight));
+        previousPath.setAttribute("d", buildLinePath(data.previousSeries, chartWidth, chartHeight));
+        chartTitle.textContent = data.title;
+        todayLabel.textContent = data.legendCurrent;
+        yesterdayLabel.textContent = data.legendPrevious;
+        todayValue.textContent = String(data.todaySeries[data.highlightIndex]);
+        yesterdayValue.textContent = String(data.previousSeries[data.highlightIndex]);
+        setChartLabels(data.labels);
+        setMetricCards(data.metrics);
+    }
+
+    async function loadDashboard(periodKey) {
+        showChartLoading(true);
+        const data = await fetchDashboardData(periodKey);
+        renderChart(data);
+        showChartLoading(false);
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const periodSelect = document.getElementById("chart-period");
+        const refreshButton = document.getElementById("refresh-chart");
+
+        periodSelect.addEventListener("change", function (event) {
+            loadDashboard(event.target.value);
+        });
+
+        refreshButton.addEventListener("click", function () {
+            loadDashboard(periodSelect.value);
+        });
+
+        loadDashboard("today");
+    });
+</script>
+</body></html>
