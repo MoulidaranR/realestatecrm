@@ -9,10 +9,20 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some(
     (publicPath) => pathname === publicPath || pathname.startsWith(`${publicPath}/`)
   );
+  const shouldResolveUser =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    (!isPublicPath && !isApiPath);
 
   let response = NextResponse.next({
     request
   });
+
+  // API routes handle auth inside each handler to avoid middleware auth round-trips.
+  if (isApiPath || !shouldResolveUser) {
+    return response;
+  }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -20,9 +30,6 @@ export async function middleware(request: NextRequest) {
     const message =
       "Server misconfiguration: missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY";
     console.error(message);
-    if (isApiPath) {
-      return NextResponse.json({ error: message }, { status: 500 });
-    }
     return new NextResponse(message, {
       status: 500,
       headers: { "content-type": "text/plain; charset=utf-8" }
@@ -88,6 +95,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
   ]
 };

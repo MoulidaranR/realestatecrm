@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { PermissionKey, RoleKey } from "@/lib/constants";
 import type { UserProfile } from "@/lib/db-types";
 import { hasDefaultPermission } from "@/lib/permissions";
@@ -11,7 +12,7 @@ export type ActorContext = {
   profile: UserProfile;
 };
 
-export async function getActorContext(): Promise<ActorContext> {
+const getActorContextCached = cache(async (): Promise<ActorContext> => {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -37,6 +38,10 @@ export async function getActorContext(): Promise<ActorContext> {
     email: user.email,
     profile: profile as UserProfile
   };
+});
+
+export async function getActorContext(): Promise<ActorContext> {
+  return getActorContextCached();
 }
 
 export async function hasPermission(
