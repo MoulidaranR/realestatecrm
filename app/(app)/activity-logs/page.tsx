@@ -1,4 +1,4 @@
-import type { ActivityLog, UserProfile } from "@/lib/db-types";
+import type { UserProfile } from "@/lib/db-types";
 import { getActorContext, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -17,7 +17,7 @@ export default async function ActivityLogsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: logs } = await supabase
     .from("activity_logs")
-    .select("*")
+    .select("id, actor_user_id, entity_type, entity_id, action, description, created_at")
     .eq("company_id", actor.profile.company_id)
     .order("created_at", { ascending: false })
     .limit(300);
@@ -51,7 +51,7 @@ export default async function ActivityLogsPage() {
             </tr>
           </thead>
           <tbody>
-            {((logs ?? []) as ActivityLog[]).map((log) => (
+            {(logs ?? []).map((log) => (
               <tr key={log.id} className="border-b border-slate-100">
                 <td className="px-4 py-3 text-slate-700">{formatDateTime(log.created_at)}</td>
                 <td className="px-4 py-3 text-slate-700">

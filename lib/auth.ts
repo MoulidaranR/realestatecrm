@@ -44,6 +44,20 @@ export async function getActorContext(): Promise<ActorContext> {
   return getActorContextCached();
 }
 
+const getRolePermissionsCached = cache(async (roleKey: RoleKey) => {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("role_permissions")
+    .select("permission_key")
+    .eq("role_key", roleKey);
+
+  if (error) {
+    return null;
+  }
+
+  return new Set((data ?? []).map((item) => item.permission_key as PermissionKey));
+});
+
 export async function hasPermission(
   roleKey: RoleKey,
   permissionKey: PermissionKey
@@ -52,19 +66,12 @@ export async function hasPermission(
     return true;
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("role_permissions")
-    .select("permission_key")
-    .eq("role_key", roleKey)
-    .eq("permission_key", permissionKey)
-    .limit(1);
-
-  if (error) {
+  const permissionSet = await getRolePermissionsCached(roleKey);
+  if (!permissionSet) {
     return hasDefaultPermission(roleKey, permissionKey);
   }
 
-  if (data && data.length > 0) {
+  if (permissionSet.has(permissionKey)) {
     return true;
   }
 

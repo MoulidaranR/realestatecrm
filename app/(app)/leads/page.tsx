@@ -1,5 +1,5 @@
 import { LeadsPageClient } from "@/components/leads-page-client";
-import type { Lead, UserProfile } from "@/lib/db-types";
+import type { UserProfile } from "@/lib/db-types";
 import { getActorContext, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -10,7 +10,9 @@ export default async function LeadsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: leads } = await supabase
     .from("leads")
-    .select("*")
+    .select(
+      "id, full_name, phone, city, pipeline_stage, lead_status, score, assigned_to, next_followup_at, created_at"
+    )
     .eq("company_id", actor.profile.company_id)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -21,7 +23,7 @@ export default async function LeadsPage() {
     : { data: [] as Array<Pick<UserProfile, "id" | "full_name">> };
   const assigneeMap = new Map((assignees ?? []).map((profile) => [profile.id, profile.full_name]));
 
-  const enrichedLeads = ((leads ?? []) as Lead[]).map((lead) => ({
+  const enrichedLeads = (leads ?? []).map((lead) => ({
     ...lead,
     assignee_name: lead.assigned_to ? (assigneeMap.get(lead.assigned_to) ?? null) : null
   }));

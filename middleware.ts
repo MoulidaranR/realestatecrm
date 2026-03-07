@@ -9,17 +9,14 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some(
     (publicPath) => pathname === publicPath || pathname.startsWith(`${publicPath}/`)
   );
-  const shouldResolveUser =
-    pathname === "/" ||
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    (!isPublicPath && !isApiPath);
+  const shouldResolveUser = pathname === "/" || pathname === "/login" || pathname === "/signup";
 
   let response = NextResponse.next({
     request
   });
 
-  // API routes handle auth inside each handler to avoid middleware auth round-trips.
+  // API routes and protected app routes handle auth inside server layouts/pages.
+  // Keeping middleware lightweight reduces section-switch latency.
   if (isApiPath || !shouldResolveUser) {
     return response;
   }

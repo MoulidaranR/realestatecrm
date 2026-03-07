@@ -1,5 +1,5 @@
 import { FollowUpsTable } from "@/components/follow-ups-table";
-import type { FollowUp, Lead, UserProfile } from "@/lib/db-types";
+import type { Lead, UserProfile } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -10,7 +10,7 @@ export default async function FollowUpsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: followUps } = await supabase
     .from("follow_ups")
-    .select("*")
+    .select("id, lead_id, assigned_user_id, due_at, status, note, created_at")
     .eq("company_id", actor.profile.company_id)
     .order("due_at", { ascending: true })
     .limit(300);
@@ -18,16 +18,18 @@ export default async function FollowUpsPage() {
   const leadIds = Array.from(new Set((followUps ?? []).map((item) => item.lead_id)));
   const userIds = Array.from(new Set((followUps ?? []).map((item) => item.assigned_user_id)));
 
-  const { data: leads } = leadIds.length
-    ? await supabase.from("leads").select("id, full_name").in("id", leadIds)
-    : { data: [] as Array<Pick<Lead, "id" | "full_name">> };
-  const { data: users } = userIds.length
-    ? await supabase.from("user_profiles").select("id, full_name").in("id", userIds)
-    : { data: [] as Array<Pick<UserProfile, "id" | "full_name">> };
+  const [{ data: leads }, { data: users }, canManage] = await Promise.all([
+    leadIds.length
+      ? supabase.from("leads").select("id, full_name").in("id", leadIds)
+      : Promise.resolve({ data: [] as Array<Pick<Lead, "id" | "full_name">> }),
+    userIds.length
+      ? supabase.from("user_profiles").select("id, full_name").in("id", userIds)
+      : Promise.resolve({ data: [] as Array<Pick<UserProfile, "id" | "full_name">> }),
+    hasPermission(actor.profile.role_key, "followups.manage")
+  ]);
 
   const leadMap = new Map((leads ?? []).map((lead) => [lead.id, lead.full_name]));
   const userMap = new Map((users ?? []).map((user) => [user.id, user.full_name]));
-  const canManage = await hasPermission(actor.profile.role_key, "followups.manage");
 
   return (
     <div className="space-y-4">
@@ -38,7 +40,7 @@ export default async function FollowUpsPage() {
         </p>
       </div>
       <FollowUpsTable
-        initialFollowUps={((followUps ?? []) as FollowUp[]).map((item) => ({
+        initialFollowUps={(followUps ?? []).map((item) => ({
           ...item,
           lead_name: leadMap.get(item.lead_id) ?? "Unknown lead",
           assignee_name: userMap.get(item.assigned_user_id) ?? "Unknown user"

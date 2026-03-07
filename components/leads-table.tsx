@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Lead } from "@/lib/db-types";
+import type { LeadStatus, PipelineStage } from "@/lib/db-types";
 import { PIPELINE_STAGES, formatStageLabel } from "@/lib/lead-options";
 
-export type LeadTableItem = Lead & {
+export type LeadTableItem = {
+  id: string;
+  full_name: string;
+  phone: string;
+  city: string | null;
+  pipeline_stage: PipelineStage;
+  lead_status: LeadStatus;
+  score: number;
+  next_followup_at: string | null;
+  created_at: string;
   assignee_name: string | null;
 };
 
