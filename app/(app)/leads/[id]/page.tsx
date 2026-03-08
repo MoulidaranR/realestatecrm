@@ -3,6 +3,7 @@ import { LeadDetailClient } from "@/components/lead-detail-client";
 import type { Deal, FollowUp, Lead, LeadNote, SiteVisit, UserProfile } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 type LeadDetailPageProps = {
   params: Promise<{
@@ -73,12 +74,11 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Lead detail</h1>
-        <p className="text-sm text-slate-500">
-          Complete profile, tasks, and visit flow for this lead.
-        </p>
-      </div>
+      <PageHeader
+        title={typedLead.full_name}
+        subtitle="Complete profile, tasks, and visit flow for this lead."
+        breadcrumbs={[{ label: "Main" }, { label: "Leads", href: "/leads" }, { label: typedLead.full_name }]}
+      />
 
       <LeadDetailClient
         lead={{

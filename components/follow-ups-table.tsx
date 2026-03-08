@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { FollowUpMode, FollowUpPriority, FollowUpStatus, UserProfile } from "@/lib/db-types";
-import { FOLLOW_UP_MODES, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUSES } from "@/lib/lead-options";
+import { FOLLOW_UP_MODES, FOLLOW_UP_PRIORITIES } from "@/lib/lead-options";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 
 export type FollowUpListItem = {
   id: string;
@@ -45,16 +49,38 @@ type FollowUpsTableProps = {
 
 type FollowUpFilter = "today" | "overdue" | "upcoming" | "completed" | "missed" | "all";
 
-function formatDateTime(value: string | null): string {
-  if (!value) {
-    return "-";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    return "-";
-  }
-  return date.toLocaleString();
+function fmt(value: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.valueOf())) return "—";
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) + " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
+
+function priorityVariant(p: string): "danger" | "warning" | "info" | "default" {
+  if (p === "high" || p === "urgent") return "danger";
+  if (p === "medium") return "warning";
+  if (p === "low") return "info";
+  return "default";
+}
+
+function statusVariant(s: string): "success" | "danger" | "warning" | "default" | "info" {
+  if (s === "completed") return "success";
+  if (s === "missed") return "danger";
+  if (s === "cancelled") return "default";
+  if (s === "pending") return "warning";
+  return "info";
+}
+
+const selectCls = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500";
+
+const FILTER_TABS: { key: FollowUpFilter; label: string; color: string }[] = [
+  { key: "today", label: "Today", color: "bg-primary-600" },
+  { key: "overdue", label: "Overdue", color: "bg-danger-600" },
+  { key: "upcoming", label: "Upcoming", color: "bg-info-600" },
+  { key: "completed", label: "Completed", color: "bg-success-600" },
+  { key: "missed", label: "Missed", color: "bg-warning-600" },
+  { key: "all", label: "All", color: "bg-slate-700" }
+];
 
 export function FollowUpsTable({ initialFollowUps, leads, users, canManage }: FollowUpsTableProps) {
   const [followUps, setFollowUps] = useState(initialFollowUps);
@@ -63,16 +89,10 @@ export function FollowUpsTable({ initialFollowUps, leads, users, canManage }: Fo
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [cityFilter, setCityFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [leadPriorityFilter, setLeadPriorityFilter] = useState("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
   const [loadingId, setLoadingId] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const { toast } = useToast();
 
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     leadId: leads[0]?.id ?? "",
     assignedUserId: users[0]?.id ?? "",
@@ -86,477 +106,265 @@ export function FollowUpsTable({ initialFollowUps, leads, users, canManage }: Fo
     nextFollowupAt: ""
   });
 
-  const cityOptions = useMemo(
-    () => Array.from(new Set(leads.map((lead) => lead.city || "Unknown"))).sort(),
-    [leads]
-  );
   const assigneeOptions = useMemo(
-    () => Array.from(new Set(followUps.map((item) => item.assignee_name))).sort(),
+    () => Array.from(new Set(followUps.map((i) => i.assignee_name))).sort(),
     [followUps]
   );
 
   const filteredFollowUps = useMemo(() => {
     const now = new Date();
     const today = now.toDateString();
-    const normalizedSearch = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase();
     return followUps.filter((item) => {
       const dueDate = new Date(item.due_at);
       const isToday = dueDate.toDateString() === today;
       const isOverdue = dueDate < now && item.status === "pending";
-      const isUpcoming = dueDate > now && ["pending"].includes(item.status);
-      const isCompleted = item.status === "completed";
-      const isMissed = item.status === "missed";
+      const isUpcoming = dueDate > now && item.status === "pending";
 
-      if (activeFilter === "today" && !isToday) {
-        return false;
-      }
-      if (activeFilter === "overdue" && !isOverdue) {
-        return false;
-      }
-      if (activeFilter === "upcoming" && !isUpcoming) {
-        return false;
-      }
-      if (activeFilter === "completed" && !isCompleted) {
-        return false;
-      }
-      if (activeFilter === "missed" && !isMissed) {
-        return false;
-      }
+      if (activeFilter === "today" && !isToday) return false;
+      if (activeFilter === "overdue" && !isOverdue) return false;
+      if (activeFilter === "upcoming" && !isUpcoming) return false;
+      if (activeFilter === "completed" && item.status !== "completed") return false;
+      if (activeFilter === "missed" && item.status !== "missed") return false;
 
-      if (
-        normalizedSearch &&
-        !`${item.lead_name} ${item.lead_phone} ${item.lead_city}`.toLowerCase().includes(normalizedSearch)
-      ) {
-        return false;
-      }
-      if (assigneeFilter !== "all" && item.assignee_name !== assigneeFilter) {
-        return false;
-      }
-      if (priorityFilter !== "all" && item.priority !== priorityFilter) {
-        return false;
-      }
-      if (modeFilter !== "all" && item.mode !== modeFilter) {
-        return false;
-      }
-      if (statusFilter !== "all" && item.status !== statusFilter) {
-        return false;
-      }
-      if (cityFilter !== "all" && item.lead_city !== cityFilter) {
-        return false;
-      }
-      if (sourceFilter !== "all" && item.lead_source_platform !== sourceFilter) {
-        return false;
-      }
-      if (leadPriorityFilter !== "all" && item.lead_priority !== leadPriorityFilter) {
-        return false;
-      }
-      if (fromDate) {
-        const from = new Date(`${fromDate}T00:00:00`);
-        if (dueDate < from) {
-          return false;
-        }
-      }
-      if (toDate) {
-        const to = new Date(`${toDate}T23:59:59`);
-        if (dueDate > to) {
-          return false;
-        }
-      }
+      if (q && !`${item.lead_name} ${item.lead_phone} ${item.lead_city}`.toLowerCase().includes(q)) return false;
+      if (assigneeFilter !== "all" && item.assignee_name !== assigneeFilter) return false;
+      if (priorityFilter !== "all" && item.priority !== priorityFilter) return false;
+      if (modeFilter !== "all" && item.mode !== modeFilter) return false;
       return true;
     });
-  }, [
-    activeFilter,
-    assigneeFilter,
-    cityFilter,
-    followUps,
-    fromDate,
-    leadPriorityFilter,
-    modeFilter,
-    priorityFilter,
-    search,
-    sourceFilter,
-    statusFilter,
-    toDate
-  ]);
+  }, [activeFilter, assigneeFilter, followUps, modeFilter, priorityFilter, search]);
 
-  async function createFollowUp(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    const now = new Date();
+    const today = now.toDateString();
+    const counts: Record<FollowUpFilter, number> = { today: 0, overdue: 0, upcoming: 0, completed: 0, missed: 0, all: followUps.length };
+    for (const item of followUps) {
+      const d = new Date(item.due_at);
+      if (d.toDateString() === today) counts.today++;
+      if (d < now && item.status === "pending") counts.overdue++;
+      if (d > now && item.status === "pending") counts.upcoming++;
+      if (item.status === "completed") counts.completed++;
+      if (item.status === "missed") counts.missed++;
+    }
+    return counts;
+  }, [followUps]);
+
+  async function createFollowUp(e: React.FormEvent) {
+    e.preventDefault();
     setLoadingId("create");
-
-    const response = await fetch("/api/follow-ups", {
+    const res = await fetch("/api/follow-ups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form)
     });
-    const payload = (await response.json()) as { error?: string; id?: string };
-    if (!response.ok || !payload.id) {
-      setError(payload.error ?? "Failed to create follow-up");
+    const json = (await res.json()) as { error?: string; id?: string };
+    if (!res.ok || !json.id) {
+      toast("error", json.error ?? "Failed to create follow-up");
       setLoadingId("");
       return;
     }
-
-    const createdId = payload.id;
-    const lead = leads.find((item) => item.id === form.leadId);
-    const user = users.find((item) => item.id === form.assignedUserId);
-    setFollowUps((prev) => [
-      {
-        id: createdId,
-        lead_id: form.leadId,
-        lead_name: lead?.full_name ?? "Unknown lead",
-        lead_phone: lead?.phone ?? "-",
-        lead_city: lead?.city ?? "Unknown",
-        lead_source_platform: lead?.source_platform ?? "unknown",
-        lead_priority: lead?.lead_priority ?? "warm",
-        assigned_user_id: form.assignedUserId,
-        assignee_name: user?.full_name ?? "Unknown user",
-        due_at: new Date(form.dueAt).toISOString(),
-        status: form.status,
-        mode: form.mode,
-        purpose: form.purpose || null,
-        outcome: form.outcome || null,
-        priority: form.priority,
-        note: form.note || null,
-        next_followup_at: form.nextFollowupAt ? new Date(form.nextFollowupAt).toISOString() : null,
-        completed_at: form.status === "completed" ? new Date().toISOString() : null,
-        created_at: new Date().toISOString()
-      },
-      ...prev
-    ]);
-    setForm((prev) => ({
-      ...prev,
-      dueAt: "",
-      purpose: "",
-      outcome: "",
-      note: "",
-      nextFollowupAt: ""
-    }));
-    setSuccess("Follow-up created.");
+    const lead = leads.find((l) => l.id === form.leadId);
+    const user = users.find((u) => u.id === form.assignedUserId);
+    setFollowUps((prev) => [{
+      id: json.id as string,
+      lead_id: form.leadId,
+      lead_name: lead?.full_name ?? "Unknown lead",
+      lead_phone: lead?.phone ?? "-",
+      lead_city: lead?.city ?? "Unknown",
+      lead_source_platform: lead?.source_platform ?? "unknown",
+      lead_priority: lead?.lead_priority ?? "warm",
+      assigned_user_id: form.assignedUserId,
+      assignee_name: user?.full_name ?? "Unknown",
+      due_at: new Date(form.dueAt).toISOString(),
+      status: form.status,
+      mode: form.mode,
+      purpose: form.purpose || null,
+      outcome: form.outcome || null,
+      priority: form.priority,
+      note: form.note || null,
+      next_followup_at: form.nextFollowupAt ? new Date(form.nextFollowupAt).toISOString() : null,
+      completed_at: null,
+      created_at: new Date().toISOString()
+    }, ...prev]);
+    setForm((p) => ({ ...p, dueAt: "", purpose: "", outcome: "", note: "", nextFollowupAt: "" }));
+    setShowForm(false);
+    toast("success", "Follow-up created.");
     setLoadingId("");
   }
 
-  async function updateStatus(
-    item: FollowUpListItem,
-    status: FollowUpStatus,
-    nextFollowupAt: string | null = null
-  ) {
+  async function updateStatus(item: FollowUpListItem, status: FollowUpStatus, nextFollowupAt: string | null = null) {
     setLoadingId(item.id);
-    setError("");
-    setSuccess("");
-    const response = await fetch(`/api/follow-ups/${item.id}/status`, {
+    const res = await fetch(`/api/follow-ups/${item.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status,
-        nextFollowupAt,
-        outcome: item.outcome,
-        note: item.note
-      })
+      body: JSON.stringify({ status, nextFollowupAt, outcome: item.outcome, note: item.note })
     });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(payload.error ?? "Failed to update follow-up");
-      setLoadingId("");
-      return;
-    }
-    setFollowUps((prev) =>
-      prev.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              status,
-              next_followup_at: nextFollowupAt ? new Date(nextFollowupAt).toISOString() : entry.next_followup_at,
-              completed_at: status === "completed" ? new Date().toISOString() : entry.completed_at
-            }
-          : entry
-      )
-    );
-    setSuccess("Follow-up updated.");
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) { toast("error", json.error ?? "Update failed"); setLoadingId(""); return; }
+    setFollowUps((prev) => prev.map((e) => e.id === item.id ? { ...e, status, next_followup_at: nextFollowupAt ? new Date(nextFollowupAt).toISOString() : e.next_followup_at, completed_at: status === "completed" ? new Date().toISOString() : e.completed_at } : e));
+    toast("success", `Follow-up ${status}.`);
     setLoadingId("");
   }
 
   async function reschedule(item: FollowUpListItem) {
-    const next = window.prompt("Enter new follow-up datetime (YYYY-MM-DDTHH:mm)", "");
-    if (!next) {
-      return;
-    }
+    const next = window.prompt("New follow-up datetime (YYYY-MM-DDTHH:mm)", "");
+    if (!next) return;
     await updateStatus(item, "pending", next);
   }
 
   return (
-    <div className="space-y-3">
-      {canManage ? (
-        <form onSubmit={createFollowUp} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Create Follow-up</h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <select
-              value={form.leadId}
-              onChange={(event) => setForm((prev) => ({ ...prev, leadId: event.target.value }))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              required
-            >
-              {leads.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.full_name} ({lead.phone})
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.assignedUserId}
-              onChange={(event) => setForm((prev) => ({ ...prev, assignedUserId: event.target.value }))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.full_name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="datetime-local"
-              value={form.dueAt}
-              onChange={(event) => setForm((prev) => ({ ...prev, dueAt: event.target.value }))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
-            <select
-              value={form.mode}
-              onChange={(event) => setForm((prev) => ({ ...prev, mode: event.target.value as FollowUpMode }))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {FOLLOW_UP_MODES.map((mode) => (
-                <option key={mode} value={mode}>
-                  {mode}
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.priority}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, priority: event.target.value as FollowUpPriority }))
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {FOLLOW_UP_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-            <select
-              value={form.status}
-              onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as FollowUpStatus }))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {FOLLOW_UP_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input
-              placeholder="Purpose"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.purpose}
-              onChange={(event) => setForm((prev) => ({ ...prev, purpose: event.target.value }))}
-            />
-            <input
-              placeholder="Outcome"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={form.outcome}
-              onChange={(event) => setForm((prev) => ({ ...prev, outcome: event.target.value }))}
-            />
-            <input
-              type="datetime-local"
-              value={form.nextFollowupAt}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, nextFollowupAt: event.target.value }))
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <textarea
-            rows={2}
-            placeholder="Notes"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            value={form.note}
-            onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-          />
+    <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-border bg-surface p-1.5 shadow-card overflow-x-auto">
+        {FILTER_TABS.map((tab) => (
           <button
-            type="submit"
-            disabled={loadingId === "create"}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveFilter(tab.key)}
+            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
+              activeFilter === tab.key
+                ? `${tab.color} text-white shadow-sm`
+                : "text-slate-600 hover:bg-slate-100"
+            }`}
           >
-            {loadingId === "create" ? "Saving..." : "Create Follow-up"}
+            {tab.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${activeFilter === tab.key ? "bg-white/25 text-white" : "bg-slate-200 text-slate-600"}`}>
+              {tabCounts[tab.key]}
+            </span>
           </button>
+        ))}
+      </div>
+
+      {/* Filter row */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search lead / phone / city…"
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+          <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className={selectCls}>
+            <option value="all">All assignees</option>
+            {assigneeOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className={selectCls}>
+            <option value="all">All priority</option>
+            {FOLLOW_UP_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} className={selectCls}>
+            <option value="all">All modes</option>
+            {FOLLOW_UP_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {canManage && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowForm(!showForm)}
+              icon={<svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>}
+            >
+              Create
+            </Button>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-text-muted">
+          Showing <strong className="text-text-primary">{filteredFollowUps.length}</strong> results
+        </p>
+      </div>
+
+      {/* Create form (collapsible) */}
+      {canManage && showForm && (
+        <form onSubmit={createFollowUp} className="rounded-xl border border-border bg-surface p-5 shadow-card space-y-4 animate-fade-in">
+          <h3 className="text-sm font-semibold text-text-primary">New Follow-up</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <select value={form.leadId} onChange={(e) => setForm((p) => ({ ...p, leadId: e.target.value }))} className={selectCls} required>
+              {leads.map((l) => <option key={l.id} value={l.id}>{l.full_name} ({l.phone})</option>)}
+            </select>
+            <select value={form.assignedUserId} onChange={(e) => setForm((p) => ({ ...p, assignedUserId: e.target.value }))} className={selectCls}>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+            <input type="datetime-local" value={form.dueAt} onChange={(e) => setForm((p) => ({ ...p, dueAt: e.target.value }))} className={selectCls} required />
+            <select value={form.mode} onChange={(e) => setForm((p) => ({ ...p, mode: e.target.value as FollowUpMode }))} className={selectCls}>
+              {FOLLOW_UP_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select value={form.priority} onChange={(e) => setForm((p) => ({ ...p, priority: e.target.value as FollowUpPriority }))} className={selectCls}>
+              {FOLLOW_UP_PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <input placeholder="Purpose" value={form.purpose} onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))} className={selectCls} />
+          </div>
+          <textarea rows={2} placeholder="Notes" value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} className={`${selectCls} w-full`} />
+          <div className="flex gap-2">
+            <Button variant="primary" type="submit" loading={loadingId === "create"}>Create Follow-up</Button>
+            <Button variant="outline" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
+          </div>
         </form>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
+      )}
+      {!canManage && (
+        <div className="rounded-xl border border-dashed border-border bg-surface p-4 text-sm text-text-muted">
           You can view follow-ups but cannot create or modify them with your current role.
         </div>
       )}
 
-      {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
-      {success ? <p className="text-sm font-semibold text-emerald-600">{success}</p> : null}
-
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          {(["today", "overdue", "upcoming", "completed", "missed", "all"] as FollowUpFilter[]).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => setActiveFilter(filter)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${
-                activeFilter === filter
-                  ? "bg-primary text-white"
-                  : "border border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-4 xl:grid-cols-8">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search lead/phone/city"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm md:col-span-2"
-          />
-          <select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All assignees</option>
-            {assigneeOptions.map((assignee) => (
-              <option key={assignee} value={assignee}>
-                {assignee}
-              </option>
-            ))}
-          </select>
-          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All priority</option>
-            {FOLLOW_UP_PRIORITIES.map((priority) => (
-              <option key={priority} value={priority}>
-                {priority}
-              </option>
-            ))}
-          </select>
-          <select value={modeFilter} onChange={(event) => setModeFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All mode</option>
-            {FOLLOW_UP_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </select>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All status</option>
-            {FOLLOW_UP_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-          <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All cities</option>
-            {cityOptions.map((city) => (
-              <option key={city} value={city}>
-                {city}
-              </option>
-            ))}
-          </select>
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All sources</option>
-            {Array.from(new Set(leads.map((lead) => lead.source_platform))).map((source) => (
-              <option key={source} value={source}>
-                {source}
-              </option>
-            ))}
-          </select>
-          <select value={leadPriorityFilter} onChange={(event) => setLeadPriorityFilter(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="all">All lead potential</option>
-            {Array.from(new Set(leads.map((lead) => lead.lead_priority))).map((priority) => (
-              <option key={priority} value={priority}>
-                {priority}
-              </option>
-            ))}
-          </select>
-          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-[1200px] text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Lead</th>
-                <th className="px-3 py-2">Phone</th>
-                <th className="px-3 py-2">City</th>
-                <th className="px-3 py-2">Assignee</th>
-                <th className="px-3 py-2">Due</th>
-                <th className="px-3 py-2">Priority</th>
-                <th className="px-3 py-2">Mode</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Latest Note</th>
-                <th className="px-3 py-2">Actions</th>
+      {/* Table */}
+      <div className="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
+        <div className="table-container scrollbar-thin">
+          <table className="w-full min-w-[1100px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/70">
+                {["Lead", "Assignee", "Due", "Priority", "Mode", "Status", "Note", "Actions"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody>
-              {filteredFollowUps.map((item) => (
-                <tr key={item.id} className="border-b border-slate-100">
-                  <td className="px-3 py-2 font-medium">
-                    <Link href={`/leads/${item.lead_id}`} className="text-primary hover:underline">
-                      {item.lead_name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2">{item.lead_phone}</td>
-                  <td className="px-3 py-2">{item.lead_city}</td>
-                  <td className="px-3 py-2">{item.assignee_name}</td>
-                  <td className="px-3 py-2">{formatDateTime(item.due_at)}</td>
-                  <td className="px-3 py-2">{item.priority}</td>
-                  <td className="px-3 py-2">{item.mode}</td>
-                  <td className="px-3 py-2">{item.status}</td>
-                  <td className="px-3 py-2">{item.note ?? "-"}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      <a href={`tel:${item.lead_phone}`} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">
-                        Call
-                      </a>
-                      <Link href={`/leads/${item.lead_id}`} className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">
-                        Open Lead
-                      </Link>
-                      {canManage ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => updateStatus(item, "completed")}
-                            disabled={loadingId === item.id}
-                            className="rounded border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-700"
-                          >
-                            Complete
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => reschedule(item)}
-                            disabled={loadingId === item.id}
-                            className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700"
-                          >
-                            Reschedule
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-slate-100">
               {filteredFollowUps.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={10}>
-                    No follow-ups found for current filters.
+                  <td colSpan={8}>
+                    <EmptyState compact title={`No ${activeFilter === "all" ? "" : activeFilter + " "}follow-ups`} description="Adjust your filters or create a new follow-up." />
                   </td>
                 </tr>
-              ) : null}
+              ) : (
+                filteredFollowUps.map((item) => {
+                  const isOverdue = new Date(item.due_at) < new Date() && item.status === "pending";
+                  const isBusy = loadingId === item.id;
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link href={`/leads/${item.lead_id}`} className="font-medium text-primary-600 hover:underline truncate block max-w-[150px]">
+                          {item.lead_name}
+                        </Link>
+                        <p className="text-[11px] text-text-muted mt-0.5">{item.lead_phone}{item.lead_city ? ` · ${item.lead_city}` : ""}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">{item.assignee_name}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span className={isOverdue ? "text-danger-600 font-semibold" : "text-text-secondary"}>
+                          {isOverdue && "⚠ "}{fmt(item.due_at)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"><Badge variant={priorityVariant(item.priority)}>{item.priority}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant="default">{item.mode}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={statusVariant(item.status)} dot>{item.status}</Badge></td>
+                      <td className="px-4 py-3 text-xs text-text-muted max-w-[140px] truncate">{item.note ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <a href={`tel:${item.lead_phone}`} className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors" title="Call">📞</a>
+                          {canManage && item.status === "pending" && (
+                            <>
+                              <button type="button" onClick={() => updateStatus(item, "completed")} disabled={isBusy} className="rounded-lg border border-success-300 bg-success-50 px-2 py-1 text-[11px] font-semibold text-success-700 hover:bg-success-100 disabled:opacity-50 transition-colors">✓</button>
+                              <button type="button" onClick={() => reschedule(item)} disabled={isBusy} className="rounded-lg border border-warning-300 bg-warning-50 px-2 py-1 text-[11px] font-semibold text-warning-700 hover:bg-warning-100 disabled:opacity-50 transition-colors">↻</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -26,16 +26,25 @@ export default async function AppLayout({
   }
 
   const supabase = await createServerSupabaseClient();
-  const { count: unreadNotifications } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", actor.profile.company_id)
-    .eq("user_profile_id", actor.profile.id)
-    .eq("is_read", false);
+
+  const [{ count: unreadNotifications }, { data: company }] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", actor.profile.company_id)
+      .eq("user_profile_id", actor.profile.id)
+      .eq("is_read", false),
+    supabase
+      .from("companies")
+      .select("name")
+      .eq("id", actor.profile.company_id)
+      .single()
+  ]);
 
   return (
     <DashboardShell
       profile={actor.profile}
+      companyName={company?.name ?? undefined}
       unreadNotifications={unreadNotifications ?? 0}
     >
       {children}

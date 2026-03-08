@@ -2,6 +2,7 @@ import { SiteVisitsTable } from "@/components/site-visits-table";
 import type { Lead, UserProfile } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function SiteVisitsPage() {
   const actor = await getActorContext();
@@ -37,12 +38,11 @@ export default async function SiteVisitsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Site Visits</h1>
-        <p className="text-sm text-slate-500">
-          Plan site visits, capture outcomes, and trigger the next action instantly.
-        </p>
-      </div>
+      <PageHeader
+        title="Site Visits"
+        subtitle="Plan site visits, capture outcomes, and trigger the next action instantly."
+        breadcrumbs={[{ label: "Main" }, { label: "Site Visits" }]}
+      />
       <SiteVisitsTable
         initialSiteVisits={(siteVisits ?? []).map((item) => {
           const lead = leadMap.get(item.lead_id) as Lead | undefined;

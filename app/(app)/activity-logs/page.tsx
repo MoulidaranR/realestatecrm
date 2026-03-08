@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { UserProfile } from "@/lib/db-types";
 import { getActorContext, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type ActivityLogsPageProps = {
   searchParams: Promise<{
@@ -14,34 +17,28 @@ type ActivityLogsPageProps = {
   }>;
 };
 
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    return "-";
-  }
-  return date.toLocaleString();
+function fmt(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.valueOf())) return "—";
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" }) + " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
-function relatedEntityPath(entityType: string, entityId: string | null): string | null {
-  if (!entityId) {
-    return null;
-  }
-  if (entityType === "lead") {
-    return `/leads/${entityId}`;
-  }
-  if (entityType === "follow_up") {
-    return "/follow-ups";
-  }
-  if (entityType === "site_visit") {
-    return "/site-visits";
-  }
-  if (entityType === "user") {
-    return "/users";
-  }
-  if (entityType === "report") {
-    return "/reports";
-  }
+function entityLink(entityType: string, entityId: string | null): string | null {
+  if (!entityId) return null;
+  if (entityType === "lead") return `/leads/${entityId}`;
+  if (entityType === "follow_up") return "/follow-ups";
+  if (entityType === "site_visit") return "/site-visits";
+  if (entityType === "user") return "/users";
+  if (entityType === "report") return "/reports";
   return null;
+}
+
+function entityVariant(t: string): "purple" | "info" | "warning" | "success" | "danger" | "default" {
+  if (t === "lead") return "purple";
+  if (t === "follow_up") return "info";
+  if (t === "site_visit") return "success";
+  if (t === "user") return "warning";
+  return "default";
 }
 
 export default async function ActivityLogsPage({ searchParams }: ActivityLogsPageProps) {
@@ -59,207 +56,141 @@ export default async function ActivityLogsPage({ searchParams }: ActivityLogsPag
   const supabase = await createServerSupabaseClient();
   let query = supabase
     .from("activity_logs")
-    .select(
-      "id, actor_user_id, action, entity_type, entity_id, description, before_json, after_json, created_at",
-      { count: "exact" }
-    )
+    .select("id, actor_user_id, action, entity_type, entity_id, description, before_json, after_json, created_at", { count: "exact" })
     .eq("company_id", actor.profile.company_id)
     .order("created_at", { ascending: false });
 
-  if (selectedActor) {
-    query = query.eq("actor_user_id", selectedActor);
-  }
-  if (selectedAction) {
-    query = query.ilike("action", `%${selectedAction}%`);
-  }
-  if (selectedEntity) {
-    query = query.eq("entity_type", selectedEntity);
-  }
-  if (from) {
-    query = query.gte("created_at", `${from}T00:00:00.000Z`);
-  }
-  if (to) {
-    query = query.lte("created_at", `${to}T23:59:59.999Z`);
-  }
-  const fromRow = (page - 1) * pageSize;
-  const toRow = fromRow + pageSize - 1;
-  const { data: logs, count } = await query.range(fromRow, toRow);
+  if (selectedActor) query = query.eq("actor_user_id", selectedActor);
+  if (selectedAction) query = query.ilike("action", `%${selectedAction}%`);
+  if (selectedEntity) query = query.eq("entity_type", selectedEntity);
+  if (from) query = query.gte("created_at", `${from}T00:00:00.000Z`);
+  if (to) query = query.lte("created_at", `${to}T23:59:59.999Z`);
 
-  const usersQuery = await supabase
+  const fromRow = (page - 1) * pageSize;
+  const { data: logs, count } = await query.range(fromRow, fromRow + pageSize - 1);
+
+  const { data: usersData } = await supabase
     .from("user_profiles")
     .select("id, full_name")
     .eq("company_id", actor.profile.company_id)
     .order("full_name", { ascending: true })
     .limit(200);
-  const users = (usersQuery.data ?? []) as Array<Pick<UserProfile, "id" | "full_name">>;
-  const userMap = new Map(users.map((user) => [user.id, user.full_name]));
+  const users = (usersData ?? []) as Array<Pick<UserProfile, "id" | "full_name">>;
+  const userMap = new Map(users.map((u) => [u.id, u.full_name]));
 
-  const entityTypes = Array.from(new Set((logs ?? []).map((log) => log.entity_type))).sort();
+  const ENTITY_TYPES = ["lead", "follow_up", "site_visit", "user", "deal", "import", "report"];
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / pageSize));
+
+  const selectCls = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500";
+
+  function buildQs(overrides: Record<string, string | number>) {
+    const base: Record<string, string> = { actor: selectedActor, action: selectedAction, entity: selectedEntity, from, to, page: String(page) };
+    for (const [k, v] of Object.entries(overrides)) base[k] = String(v);
+    return "?" + Object.entries(base).map(([k, v]) => v ? `${k}=${encodeURIComponent(v)}` : "").filter(Boolean).join("&");
+  }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Activity Logs</h1>
-        <p className="text-sm text-slate-500">
-          Auditable timeline of lead, follow-up, site visit, user, and export events.
-        </p>
-      </div>
+      <PageHeader
+        title="Activity Logs"
+        subtitle="Auditable timeline of lead, follow-up, site visit, user, and export events."
+        breadcrumbs={[{ label: "System" }, { label: "Activity Logs" }]}
+      />
 
-      <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Actor
-            <select
-              name="actor"
-              defaultValue={selectedActor}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="">All actors</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Action
-            <input
-              name="action"
-              defaultValue={selectedAction}
-              placeholder="lead.created"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Entity
-            <select
-              name="entity"
-              defaultValue={selectedEntity}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="">All entities</option>
-              {entityTypes.map((entity) => (
-                <option key={entity} value={entity}>
-                  {entity}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            From
-            <input
-              type="date"
-              name="from"
-              defaultValue={from}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            To
-            <input
-              type="date"
-              name="to"
-              defaultValue={to}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-          <div className="flex items-end gap-2">
-            <input type="hidden" name="page" value="1" />
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white"
-            >
-              Apply
-            </button>
-          </div>
+      {/* Filter bar */}
+      <form className="rounded-xl border border-border bg-surface p-4 shadow-card">
+        <div className="flex flex-wrap gap-2">
+          <select name="actor" defaultValue={selectedActor} className={selectCls}>
+            <option value="">All actors</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+          <input name="action" defaultValue={selectedAction} placeholder="Action keyword…" className={selectCls + " min-w-[140px]"} />
+          <select name="entity" defaultValue={selectedEntity} className={selectCls}>
+            <option value="">All entities</option>
+            {ENTITY_TYPES.map((e) => <option key={e} value={e}>{e.replace(/_/g, " ")}</option>)}
+          </select>
+          <input type="date" name="from" defaultValue={from} className={selectCls} />
+          <input type="date" name="to" defaultValue={to} className={selectCls} />
+          <input type="hidden" name="page" value="1" />
+          <button type="submit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 shadow-sm transition-colors">
+            Apply
+          </button>
         </div>
+        <p className="mt-2 text-xs text-text-muted">
+          Showing <strong className="text-text-primary">{(logs ?? []).length}</strong> of {count ?? 0} logs — Page {page}/{totalPages}
+        </p>
       </form>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Time</th>
-              <th className="px-4 py-3">Actor</th>
-              <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Entity</th>
-              <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Changes</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* Timeline list */}
+      <div className="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
+        {(logs ?? []).length === 0 ? (
+          <EmptyState title="No activity logs" description="Once your team starts working, events will appear here." />
+        ) : (
+          <div className="divide-y divide-slate-100">
             {(logs ?? []).map((log) => {
-              const path = relatedEntityPath(log.entity_type, log.entity_id);
+              const path = entityLink(log.entity_type, log.entity_id);
+              const hasDiff = Object.keys(log.before_json ?? {}).length > 0 || Object.keys(log.after_json ?? {}).length > 0;
               return (
-                <tr key={log.id} className="border-b border-slate-100 align-top">
-                  <td className="px-4 py-3 text-slate-700">{formatDateTime(log.created_at)}</td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {log.actor_user_id ? userMap.get(log.actor_user_id) ?? "Unknown user" : "System"}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{log.action}</td>
-                  <td className="px-4 py-3 text-slate-700">
-                    {log.entity_type}
-                    {log.entity_id ? ` (${log.entity_id})` : ""}
-                    {path ? (
-                      <div>
-                        <Link href={path} className="text-xs font-semibold text-primary hover:underline">
-                          Open
+                <div key={log.id} className="flex gap-4 px-5 py-4 hover:bg-slate-50/60 transition-colors">
+                  <div className="mt-0.5 flex-shrink-0">
+                    <div className="h-2 w-2 rounded-full bg-primary-400 ring-4 ring-primary-50" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-text-primary">
+                        {log.actor_user_id ? userMap.get(log.actor_user_id) ?? "Unknown" : "System"}
+                      </span>
+                      <span className="text-xs text-text-muted">·</span>
+                      <span className="text-xs font-mono text-text-secondary">{log.action}</span>
+                      <Badge variant={entityVariant(log.entity_type)}>{log.entity_type.replace(/_/g, " ")}</Badge>
+                      {path && (
+                        <Link href={path} className="text-[11px] font-semibold text-primary-600 hover:underline">
+                          Open →
                         </Link>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-slate-700">{log.description}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    <p>Before: {Object.keys(log.before_json ?? {}).length ? JSON.stringify(log.before_json) : "-"}</p>
-                    <p className="mt-1">After: {Object.keys(log.after_json ?? {}).length ? JSON.stringify(log.after_json) : "-"}</p>
-                  </td>
-                </tr>
+                      )}
+                    </div>
+                    {log.description && (
+                      <p className="mt-1 text-sm text-text-secondary">{log.description}</p>
+                    )}
+                    {hasDiff && (
+                      <details className="mt-1.5">
+                        <summary className="cursor-pointer text-[11px] font-medium text-primary-600 hover:underline">View changes</summary>
+                        <pre className="mt-1 rounded-lg bg-slate-50 p-2 text-[11px] text-text-muted overflow-x-auto max-h-48">
+                          {JSON.stringify({ before: log.before_json, after: log.after_json }, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                    <p className="mt-1 text-[11px] text-text-disabled">{fmt(log.created_at)}</p>
+                  </div>
+                </div>
               );
             })}
-            {(logs ?? []).length === 0 ? (
-              <tr>
-                <td className="px-4 py-6 text-center text-sm text-slate-500" colSpan={6}>
-                  No activity logs found for the current filters.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
-        <p className="text-slate-600">
-          Page {page} of {totalPages}
-        </p>
-        <div className="flex gap-2">
-          <Link
-            href={`?actor=${encodeURIComponent(selectedActor)}&action=${encodeURIComponent(
-              selectedAction
-            )}&entity=${encodeURIComponent(selectedEntity)}&from=${encodeURIComponent(
-              from
-            )}&to=${encodeURIComponent(to)}&page=${Math.max(1, page - 1)}`}
-            className={`rounded-lg border border-slate-300 px-3 py-1.5 ${
-              page <= 1 ? "pointer-events-none opacity-50" : ""
-            }`}
-          >
-            Previous
-          </Link>
-          <Link
-            href={`?actor=${encodeURIComponent(selectedActor)}&action=${encodeURIComponent(
-              selectedAction
-            )}&entity=${encodeURIComponent(selectedEntity)}&from=${encodeURIComponent(
-              from
-            )}&to=${encodeURIComponent(to)}&page=${Math.min(totalPages, page + 1)}`}
-            className={`rounded-lg border border-slate-300 px-3 py-1.5 ${
-              page >= totalPages ? "pointer-events-none opacity-50" : ""
-            }`}
-          >
-            Next
-          </Link>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 shadow-card text-sm">
+          <p className="text-text-secondary">
+            Page <strong>{page}</strong> / {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Link
+              href={buildQs({ page: Math.max(1, page - 1) })}
+              className={`rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors ${page <= 1 ? "pointer-events-none opacity-50" : ""}`}
+            >
+              ← Previous
+            </Link>
+            <Link
+              href={buildQs({ page: Math.min(totalPages, page + 1) })}
+              className={`rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors ${page >= totalPages ? "pointer-events-none opacity-50" : ""}`}
+            >
+              Next →
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

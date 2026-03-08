@@ -3,33 +3,47 @@
 import { useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { ToastProvider } from "@/components/ui/toast";
 import type { UserProfile } from "@/lib/db-types";
 
 type DashboardShellProps = {
   profile: UserProfile;
+  companyName?: string;
   unreadNotifications: number;
   children: React.ReactNode;
 };
 
-export function DashboardShell({ profile, unreadNotifications, children }: DashboardShellProps) {
+export function DashboardShell({ profile, companyName, unreadNotifications, children }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background-light text-slate-900 lg:flex">
-      <Sidebar
-        roleKey={profile.role_key}
-        mobileOpen={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-      />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <Topbar
-          fullName={profile.full_name}
+    <ToastProvider>
+      <div className="flex h-screen overflow-hidden bg-surface-muted">
+        {/* Sidebar */}
+        <Sidebar
           roleKey={profile.role_key}
-          unreadNotifications={unreadNotifications}
-          onMenuToggle={() => setMobileOpen((prev) => !prev)}
+          fullName={profile.full_name}
+          companyName={companyName}
+          mobileOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
         />
-        <main className="flex-1 p-6">{children}</main>
+
+        {/* Main column */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Topbar
+            fullName={profile.full_name}
+            roleKey={profile.role_key}
+            unreadNotifications={unreadNotifications}
+            onMenuToggle={() => setMobileOpen((prev) => !prev)}
+          />
+          {/* Page content — scrolls independently */}
+          <main className="flex-1 overflow-y-auto scrollbar-thin">
+            <div className="mx-auto max-w-screen-2xl px-5 py-6">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }

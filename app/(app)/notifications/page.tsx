@@ -2,6 +2,7 @@ import { NotificationsList } from "@/components/notifications-list";
 import type { Notification } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function NotificationsPage() {
   const actor = await getActorContext();
@@ -26,12 +27,11 @@ export default async function NotificationsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Notifications</h1>
-        <p className="text-sm text-slate-500">
-          In-app alerts for assignments, follow-up deadlines, imports, and workflow updates.
-        </p>
-      </div>
+      <PageHeader
+        title="Notifications"
+        subtitle="In-app alerts for assignments, follow-up deadlines, imports, and workflow updates."
+        breadcrumbs={[{ label: "System" }, { label: "Notifications" }]}
+      />
       <NotificationsList
         initialNotifications={(notifications ?? []) as Notification[]}
       />

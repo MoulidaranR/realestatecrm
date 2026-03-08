@@ -2,6 +2,7 @@ import { ImportJobsClient } from "@/components/import-jobs-client";
 import type { ImportJob, ImportTemplate } from "@/lib/db-types";
 import { getActorContext, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function ImportsPage() {
   const actor = await getActorContext();
@@ -25,12 +26,11 @@ export default async function ImportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Imports</h1>
-        <p className="text-sm text-slate-500">
-          CSV/XLSX upload with mapping, duplicate handling, and import history.
-        </p>
-      </div>
+      <PageHeader
+        title="Imports"
+        subtitle="CSV/XLSX upload with mapping, duplicate handling, and import history."
+        breadcrumbs={[{ label: "System" }, { label: "Imports" }]}
+      />
       <ImportJobsClient
         jobs={(jobs ?? []) as ImportJob[]}
         templates={(templates ?? []) as ImportTemplate[]}

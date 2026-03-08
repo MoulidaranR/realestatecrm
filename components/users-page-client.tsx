@@ -4,50 +4,52 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RoleKey } from "@/lib/constants";
 import type { UserProfile } from "@/lib/db-types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 
-type UsersPageClientProps = {
-  users: UserProfile[];
-};
-
-const ROLE_OPTIONS: RoleKey[] = [
-  "company_admin",
-  "manager",
-  "sales_executive",
-  "view_only"
-];
-
+const ROLE_OPTIONS: RoleKey[] = ["company_admin", "manager", "sales_executive", "view_only"];
 const STATUS_OPTIONS: Array<UserProfile["status"]> = ["active", "disabled", "invited"];
 
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "-";
-  return date.toLocaleString();
+function fmt(value: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.valueOf()) ? "—" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
-function roleBadge(role: RoleKey): string {
-  if (role === "company_admin") return "bg-emerald-100 text-emerald-700";
-  if (role === "manager") return "bg-blue-100 text-blue-700";
-  if (role === "view_only") return "bg-slate-100 text-slate-700";
-  return "bg-amber-100 text-amber-700";
+function roleVariant(role: RoleKey): "purple" | "info" | "warning" | "success" | "default" {
+  if (role === "company_admin") return "purple";
+  if (role === "manager") return "info";
+  if (role === "sales_executive") return "warning";
+  if (role === "view_only") return "default";
+  return "success";
 }
 
-function statusBadge(status: UserProfile["status"]): string {
-  if (status === "active") return "bg-emerald-100 text-emerald-700";
-  if (status === "disabled") return "bg-rose-100 text-rose-700";
-  return "bg-amber-100 text-amber-700";
+function statusVariant(s: UserProfile["status"]): "success" | "danger" | "warning" {
+  if (s === "active") return "success";
+  if (s === "disabled") return "danger";
+  return "warning";
 }
 
-/* ──────────────────────── Add User Form ──────────────────────── */
+function roleLabel(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
+function getInitials(name: string): string {
+  return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
+}
+
+// ─── Add User Form (Inside Modal) ─────────────────────────────────────────
 function AddUserForm({
   users,
   onCreated,
-  onCancel
+  onClose
 }: {
   users: UserProfile[];
   onCreated: () => void;
-  onCancel: () => void;
+  onClose: () => void;
 }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -57,477 +59,290 @@ function AddUserForm({
   const [managerUserId, setManagerUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { toast } = useToast();
 
   const managerOptions = useMemo(
     () =>
       users
-        .filter(
-          (u) =>
-            u.status === "active" &&
-            (u.role_key === "company_admin" || u.role_key === "manager")
-        )
+        .filter((u) => u.status === "active" && (u.role_key === "company_admin" || u.role_key === "manager"))
         .sort((a, b) => a.full_name.localeCompare(b.full_name)),
     [users]
   );
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setError("");
     setLoading(true);
-
-    const response = await fetch("/api/users/create", {
+    const res = await fetch("/api/users/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fullName,
-        email,
-        phone: phone || undefined,
-        password,
-        roleKey,
-        managerUserId: managerUserId || null
-      })
+      body: JSON.stringify({ fullName, email, phone: phone || undefined, password, roleKey, managerUserId: managerUserId || null })
     });
-
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(payload.error ?? "Failed to create user");
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(json.error ?? "Failed to create user.");
       setLoading(false);
       return;
     }
-
-    setLoading(false);
+    toast("success", `User ${fullName} created successfully.`);
     onCreated();
   }
 
-  return (
-    <div className="rounded-2xl border border-primary/30 bg-white p-6 shadow-md">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-slate-900">Add New User</h3>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Full Name *
-            </label>
-            <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              placeholder="John Doe"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Email *
-            </label>
-            <input
-              type="email"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="john@company.com"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Password *
-            </label>
-            <input
-              type="password"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              placeholder="Min 8 characters"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Phone
-            </label>
-            <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+91 98765 43210"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Role *
-            </label>
-            <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={roleKey}
-              onChange={(e) => setRoleKey(e.target.value as RoleKey)}
-            >
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>
-                  {role.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Reporting Manager
-            </label>
-            <select
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-primary"
-              value={managerUserId}
-              onChange={(e) => setManagerUserId(e.target.value)}
-            >
-              <option value="">None</option>
-              {managerOptions.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.full_name} ({m.role_key.replace(/_/g, " ")})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "Creating..." : "Create User"}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-/* ──────────────────────── Main Page Client ──────────────────────── */
-
-export function UsersPageClient({ users: initialUsers }: UsersPageClientProps) {
-  const router = useRouter();
-  const users = initialUsers;
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [loadingId, setLoadingId] = useState("");
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(
-    null
-  );
-
-  const sortedUsers = useMemo(
-    () => [...users].sort((a, b) => a.full_name.localeCompare(b.full_name)),
-    [users]
-  );
-  const userNameMap = useMemo(
-    () => new Map(users.map((u) => [u.id, u.full_name])),
-    [users]
-  );
-  const managerOptions = useMemo(
-    () =>
-      users
-        .filter(
-          (u) =>
-            u.status === "active" &&
-            (u.role_key === "company_admin" || u.role_key === "manager")
-        )
-        .sort((a, b) => a.full_name.localeCompare(b.full_name)),
-    [users]
-  );
-
-  function isLastActiveAdmin(user: UserProfile): boolean {
-    if (user.role_key !== "company_admin" || user.status !== "active") return false;
-    return users.filter((u) => u.role_key === "company_admin" && u.status === "active").length <= 1;
-  }
-
-  async function patchUser(
-    userId: string,
-    endpoint: "" | "role" | "status" | "manager",
-    body: Record<string, unknown>,
-    onSuccess: (updatedUsers: UserProfile[]) => void
-  ) {
-    setLoadingId(userId);
-    setFeedback(null);
-    const path = endpoint ? `/api/users/${userId}/${endpoint}` : `/api/users/${userId}`;
-    const response = await fetch(path, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setFeedback({ type: "error", message: payload.error ?? "Update failed" });
-      setLoadingId("");
-      return;
-    }
-    onSuccess(users);
-    setFeedback({ type: "success", message: "User updated." });
-    setLoadingId("");
-    router.refresh();
-  }
-
-  function handleAddUserCreated() {
-    setShowAddForm(false);
-    setFeedback({ type: "success", message: "User created successfully! They can now sign in." });
-    router.refresh();
-  }
-
-  /* ──── Empty state ──── */
-  if (users.length <= 1 && !showAddForm) {
-    return (
-      <div className="space-y-5">
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-slate-900">Add your first team member</h2>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500">
-            Start building your team. Create user accounts for your managers, sales executives, and
-            other team members.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowAddForm(true)}
-            className="mt-6 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-          >
-            + Add User
-          </button>
-        </div>
-
-        {/* Still show existing users even in "empty" state (the admin themselves) */}
-        {users.length > 0 ? (
-          <UserTable
-            users={sortedUsers}
-            userNameMap={userNameMap}
-            managerOptions={managerOptions}
-            loadingId={loadingId}
-            isLastActiveAdmin={isLastActiveAdmin}
-            patchUser={patchUser}
-          />
-        ) : null}
-      </div>
-    );
-  }
+  const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors";
+  const labelCls = "mb-1 block text-xs font-semibold text-slate-600";
 
   return (
-    <div className="space-y-5">
-      {feedback ? (
-        <div
-          className={`rounded-lg px-4 py-3 text-sm font-semibold ${
-            feedback.type === "error"
-              ? "bg-red-50 text-red-600"
-              : "bg-emerald-50 text-emerald-600"
-          }`}
-        >
-          {feedback.message}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className={labelCls}>Full Name *</label>
+          <input className={inputCls} value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Ravi Kumar" />
         </div>
-      ) : null}
+        <div>
+          <label className={labelCls}>Email *</label>
+          <input type="email" className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="ravi@company.com" />
+        </div>
+        <div>
+          <label className={labelCls}>Password *</label>
+          <input type="password" className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} placeholder="Min. 8 characters" />
+        </div>
+        <div>
+          <label className={labelCls}>Phone</label>
+          <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+        </div>
+        <div>
+          <label className={labelCls}>Role *</label>
+          <select className={inputCls} value={roleKey} onChange={(e) => setRoleKey(e.target.value as RoleKey)}>
+            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Reporting Manager</label>
+          <select className={inputCls} value={managerUserId} onChange={(e) => setManagerUserId(e.target.value)}>
+            <option value="">None</option>
+            {managerOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.full_name} ({roleLabel(m.role_key)})</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-      {showAddForm ? (
-        <AddUserForm
-          users={users}
-          onCreated={handleAddUserCreated}
-          onCancel={() => setShowAddForm(false)}
-        />
-      ) : (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setShowAddForm(true)}
-            className="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-          >
-            + Add User
-          </button>
+      {error && (
+        <div className="rounded-lg border border-danger-600/20 bg-danger-50 px-4 py-2.5 text-sm text-danger-700">
+          {error}
         </div>
       )}
 
-      <UserTable
-        users={sortedUsers}
-        userNameMap={userNameMap}
-        managerOptions={managerOptions}
-        loadingId={loadingId}
-        isLastActiveAdmin={isLastActiveAdmin}
-        patchUser={patchUser}
-      />
-    </div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+        <Button variant="outline" type="button" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" type="submit" loading={loading}>Create User</Button>
+      </div>
+    </form>
   );
 }
 
-/* ──────────────────────── Users Table Component ──────────────────────── */
+// ─── Main Page Client ──────────────────────────────────────────────────────
+export function UsersPageClient({ users: initialUsers }: { users: UserProfile[] }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [loadingId, setLoadingId] = useState("");
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | RoleKey>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | UserProfile["status"]>("all");
 
-function UserTable({
-  users,
-  userNameMap,
-  managerOptions,
-  loadingId,
-  isLastActiveAdmin,
-  patchUser
-}: {
-  users: UserProfile[];
-  userNameMap: Map<string, string>;
-  managerOptions: UserProfile[];
-  loadingId: string;
-  isLastActiveAdmin: (user: UserProfile) => boolean;
-  patchUser: (
-    userId: string,
-    endpoint: "" | "role" | "status" | "manager",
-    body: Record<string, unknown>,
-    onSuccess: (updatedUsers: UserProfile[]) => void
-  ) => void;
-}) {
+  const userNameMap = useMemo(() => new Map(initialUsers.map((u) => [u.id, u.full_name])), [initialUsers]);
+  const managerOptions = useMemo(
+    () => initialUsers.filter((u) => u.status === "active" && (u.role_key === "company_admin" || u.role_key === "manager")).sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    [initialUsers]
+  );
+
+  const filteredUsers = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...initialUsers]
+      .filter((u) => {
+        if (q && !`${u.full_name} ${u.email} ${u.phone ?? ""}`.toLowerCase().includes(q)) return false;
+        if (roleFilter !== "all" && u.role_key !== roleFilter) return false;
+        if (statusFilter !== "all" && u.status !== statusFilter) return false;
+        return true;
+      })
+      .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [initialUsers, query, roleFilter, statusFilter]);
+
+  function isLastActiveAdmin(user: UserProfile): boolean {
+    if (user.role_key !== "company_admin" || user.status !== "active") return false;
+    return initialUsers.filter((u) => u.role_key === "company_admin" && u.status === "active").length <= 1;
+  }
+
+  async function patchUser(userId: string, endpoint: "" | "role" | "status" | "manager", body: Record<string, unknown>) {
+    setLoadingId(userId);
+    const path = endpoint ? `/api/users/${userId}/${endpoint}` : `/api/users/${userId}`;
+    const res = await fetch(path, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = (await res.json()) as { error?: string };
+    setLoadingId("");
+    if (!res.ok) { toast("error", json.error ?? "Update failed."); return; }
+    toast("success", "User updated.");
+    router.refresh();
+  }
+
+  const selectCls = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-500";
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-[1200px] text-left text-sm">
-        <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-4 py-3">Name</th>
-            <th className="px-4 py-3">Email</th>
-            <th className="px-4 py-3">Phone</th>
-            <th className="px-4 py-3">Role</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Manager</th>
-            <th className="px-4 py-3">Created</th>
-            <th className="px-4 py-3">Last Active</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => {
-            const lockAdmin = isLastActiveAdmin(user);
-            const editableRole: RoleKey =
-              user.role_key === "telecaller" ? "sales_executive" : user.role_key;
-            return (
-              <tr key={user.id} className="border-b border-slate-100 align-top">
-                <td className="px-4 py-3 font-medium text-slate-900">{user.full_name}</td>
-                <td className="px-4 py-3 text-slate-600">{user.email}</td>
-                <td className="px-4 py-3 text-slate-600">{user.phone ?? "-"}</td>
-                <td className="px-4 py-3">
-                  <div className="space-y-2">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${roleBadge(user.role_key)}`}
-                    >
-                      {editableRole.replace(/_/g, " ")}
-                    </span>
-                    <select
-                      value={editableRole}
-                      onChange={(e) =>
-                        patchUser(
-                          user.id,
-                          "role",
-                          { roleKey: e.target.value as RoleKey },
-                          () => {} // server re-renders via router.refresh
-                        )
-                      }
-                      className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
-                      disabled={loadingId === user.id || lockAdmin}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {role.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="space-y-2">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${statusBadge(user.status)}`}
-                    >
-                      {user.status}
-                    </span>
-                    <select
-                      value={user.status}
-                      onChange={(e) =>
-                        patchUser(
-                          user.id,
-                          "status",
-                          { status: e.target.value as UserProfile["status"] },
-                          () => {}
-                        )
-                      }
-                      className="block w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
-                      disabled={loadingId === user.id || lockAdmin}
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    value={user.manager_user_id ?? ""}
-                    onChange={(e) =>
-                      patchUser(
-                        user.id,
-                        "manager",
-                        { managerUserId: e.target.value || null },
-                        () => {}
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
-                    disabled={loadingId === user.id || user.role_key === "company_admin"}
-                  >
-                    <option value="">Unassigned</option>
-                    {managerOptions
-                      .filter((m) => m.id !== user.id)
-                      .map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.full_name} ({m.role_key.replace(/_/g, " ")})
-                        </option>
-                      ))}
-                  </select>
-                  {user.manager_user_id ? (
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {userNameMap.get(user.manager_user_id) ?? "Assigned"}
-                    </p>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-slate-600">{formatDateTime(user.created_at)}</td>
-                <td className="px-4 py-3 text-slate-600">
-                  {formatDateTime(user.last_active_at)}
-                </td>
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative min-w-[200px] flex-1 max-w-xs">
+            <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              placeholder="Search users…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)} className={selectCls}>
+            <option value="all">All roles</option>
+            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)} className={selectCls}>
+            <option value="all">All statuses</option>
+            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => setShowAddModal(true)}
+          icon={<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>}
+        >
+          Add User
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <p className="text-xs text-text-muted">
+        Showing <strong className="text-text-primary">{filteredUsers.length}</strong> of {initialUsers.length} users
+      </p>
+
+      {/* Table */}
+      <div className="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
+        <div className="table-container scrollbar-thin">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/70">
+                {["User", "Role", "Status", "Manager", "Created", "Last Active", "Actions"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+                ))}
               </tr>
-            );
-          })}
-          {users.length === 0 ? (
-            <tr>
-              <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
-                No users found.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState compact title="No users found" description="Try adjusting your search or filters." />
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => {
+                  const lockAdmin = isLastActiveAdmin(user);
+                  const editableRole: RoleKey = user.role_key === "telecaller" ? "sales_executive" : user.role_key;
+                  const isBusy = loadingId === user.id;
+                  return (
+                    <tr key={user.id} className="hover:bg-slate-50/60 transition-colors">
+                      {/* User */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 flex-shrink-0 rounded-full bg-primary-100 flex items-center justify-center text-[11px] font-bold text-primary-700">
+                            {getInitials(user.full_name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-text-primary truncate">{user.full_name}</p>
+                            <p className="text-[11px] text-text-muted truncate">{user.email}</p>
+                            {user.phone && <p className="text-[11px] text-text-muted">{user.phone}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Role */}
+                      <td className="px-4 py-3">
+                        <div className="space-y-1.5">
+                          <Badge variant={roleVariant(user.role_key)}>{roleLabel(editableRole)}</Badge>
+                          <select
+                            value={editableRole}
+                            onChange={(e) => patchUser(user.id, "role", { roleKey: e.target.value })}
+                            disabled={isBusy || lockAdmin}
+                            className="block w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 outline-none focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+                          </select>
+                        </div>
+                      </td>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <div className="space-y-1.5">
+                          <Badge variant={statusVariant(user.status)} dot>{user.status}</Badge>
+                          <select
+                            value={user.status}
+                            onChange={(e) => patchUser(user.id, "status", { status: e.target.value })}
+                            disabled={isBusy || lockAdmin}
+                            className="block w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 outline-none focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                      </td>
+                      {/* Manager */}
+                      <td className="px-4 py-3">
+                        <select
+                          value={user.manager_user_id ?? ""}
+                          onChange={(e) => patchUser(user.id, "manager", { managerUserId: e.target.value || null })}
+                          disabled={isBusy || user.role_key === "company_admin"}
+                          className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-[11px] text-slate-700 outline-none focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">Unassigned</option>
+                          {managerOptions.filter((m) => m.id !== user.id).map((m) => (
+                            <option key={m.id} value={m.id}>{m.full_name}</option>
+                          ))}
+                        </select>
+                        {user.manager_user_id && (
+                          <p className="mt-1 text-[10px] text-text-muted">{userNameMap.get(user.manager_user_id) ?? "Assigned"}</p>
+                        )}
+                      </td>
+                      {/* Dates */}
+                      <td className="px-4 py-3 text-xs text-text-muted whitespace-nowrap">{fmt(user.created_at)}</td>
+                      <td className="px-4 py-3 text-xs text-text-muted whitespace-nowrap">{fmt(user.last_active_at)}</td>
+                      {/* Loading indicator */}
+                      <td className="px-4 py-3">
+                        {isBusy && (
+                          <svg className="h-4 w-4 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        )}
+                        {lockAdmin && (
+                          <span title="Cannot modify the last admin" className="text-xs text-text-muted">Protected</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Add User Modal */}
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add New User" description="Create a user account. They can sign in immediately with these credentials." size="md">
+        <AddUserForm
+          users={initialUsers}
+          onCreated={() => { setShowAddModal(false); router.refresh(); }}
+          onClose={() => setShowAddModal(false)}
+        />
+      </Modal>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { FollowUpsTable } from "@/components/follow-ups-table";
 import type { Lead, UserProfile } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function FollowUpsPage() {
   const actor = await getActorContext();
@@ -37,12 +38,11 @@ export default async function FollowUpsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Follow-ups</h1>
-        <p className="text-sm text-slate-500">
-          Create and manage follow-up cycles with outcomes, priorities, and one-click rescheduling.
-        </p>
-      </div>
+      <PageHeader
+        title="Follow-ups"
+        subtitle="Create and manage follow-up cycles with outcomes, priorities, and one-click rescheduling."
+        breadcrumbs={[{ label: "Main" }, { label: "Follow-ups" }]}
+      />
       <FollowUpsTable
         initialFollowUps={(followUps ?? []).map((item) => {
           const lead = leadMap.get(item.lead_id) as Lead | undefined;

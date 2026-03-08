@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { LeadsPageClient } from "@/components/leads-page-client";
 import type { UserProfile } from "@/lib/db-types";
 import { getActorContext, hasPermission, requirePermission } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function LeadsPage() {
   const actor = await getActorContext();
@@ -31,12 +33,22 @@ export default async function LeadsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
-        <p className="text-sm text-slate-500">
-          Capture, qualify, and assign leads with real estate specific requirements.
-        </p>
-      </div>
+      <PageHeader
+        title="Leads"
+        subtitle="Capture, qualify, and assign leads. Click any lead to view the full detail."
+        breadcrumbs={[{ label: "Main" }, { label: "Leads" }]}
+        actions={
+          canCreate ? (
+            <Link
+              href="/leads"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 shadow-sm transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              Create Lead
+            </Link>
+          ) : undefined
+        }
+      />
       <LeadsPageClient
         leads={(leads ?? []).map((lead) => ({
           ...lead,

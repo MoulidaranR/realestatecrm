@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Notification } from "@/lib/db-types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast";
 
 type NotificationsListProps = {
   initialNotifications: Notification[];
@@ -11,12 +15,26 @@ type NotificationsListProps = {
 type TabKey = "unread" | "read" | "all";
 type DateFilter = "all" | "7d" | "30d";
 
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) {
-    return "-";
-  }
-  return date.toLocaleString();
+function fmt(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.valueOf())) return "—";
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) + " " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function typeIcon(t: string): string {
+  if (t === "assignment") return "👤";
+  if (t === "reminder") return "⏰";
+  if (t === "system") return "⚙️";
+  if (t === "import") return "📥";
+  return "🔔";
+}
+
+function typeVariant(t: string): "purple" | "info" | "warning" | "success" | "default" {
+  if (t === "assignment") return "purple";
+  if (t === "reminder") return "warning";
+  if (t === "system") return "info";
+  if (t === "import") return "success";
+  return "default";
 }
 
 export function NotificationsList({ initialNotifications }: NotificationsListProps) {
@@ -25,37 +43,24 @@ export function NotificationsList({ initialNotifications }: NotificationsListPro
   const [tab, setTab] = useState<TabKey>("unread");
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [error, setError] = useState("");
+  const { toast } = useToast();
 
-  const unreadCount = notifications.filter((item) => !item.is_read).length;
-  const typeOptions = useMemo(
-    () => Array.from(new Set(notifications.map((item) => item.notification_type))),
-    [notifications]
-  );
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const typeOptions = useMemo(() => Array.from(new Set(notifications.map((n) => n.notification_type))), [notifications]);
 
   const filteredNotifications = useMemo(() => {
     const now = new Date();
     return notifications.filter((item) => {
-      if (tab === "unread" && item.is_read) {
-        return false;
-      }
-      if (tab === "read" && !item.is_read) {
-        return false;
-      }
-      if (typeFilter !== "all" && item.notification_type !== typeFilter) {
-        return false;
-      }
+      if (tab === "unread" && item.is_read) return false;
+      if (tab === "read" && !item.is_read) return false;
+      if (typeFilter !== "all" && item.notification_type !== typeFilter) return false;
       if (dateFilter !== "all") {
-        const createdAt = new Date(item.created_at);
-        if (Number.isNaN(createdAt.valueOf())) {
-          return false;
-        }
+        const created = new Date(item.created_at);
+        if (Number.isNaN(created.valueOf())) return false;
         const days = dateFilter === "7d" ? 7 : 30;
         const threshold = new Date(now);
         threshold.setDate(threshold.getDate() - days);
-        if (createdAt < threshold) {
-          return false;
-        }
+        if (created < threshold) return false;
       }
       return true;
     });
@@ -63,139 +68,129 @@ export function NotificationsList({ initialNotifications }: NotificationsListPro
 
   async function markRead(id: string) {
     setLoadingId(id);
-    setError("");
-    const response = await fetch(`/api/notifications/${id}/read`, {
-      method: "PATCH"
-    });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(payload.error ?? "Failed to update notification");
-      setLoadingId("");
-      return;
-    }
-    setNotifications((prev) =>
-      prev.map((notification) =>
-        notification.id === id ? { ...notification, is_read: true } : notification
-      )
-    );
+    const res = await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) { toast("error", json.error ?? "Failed to update"); setLoadingId(""); return; }
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
     setLoadingId("");
   }
 
   async function markAllAsRead() {
     setLoadingId("all");
-    setError("");
-    const response = await fetch("/api/notifications/read-all", {
-      method: "PATCH"
-    });
-    const payload = (await response.json()) as { error?: string };
-    if (!response.ok) {
-      setError(payload.error ?? "Failed to mark all as read");
-      setLoadingId("");
-      return;
-    }
-    setNotifications((prev) => prev.map((notification) => ({ ...notification, is_read: true })));
+    const res = await fetch("/api/notifications/read-all", { method: "PATCH" });
+    const json = (await res.json()) as { error?: string };
+    if (!res.ok) { toast("error", json.error ?? "Failed to mark all as read"); setLoadingId(""); return; }
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    toast("success", "All notifications marked as read.");
     setLoadingId("");
   }
 
+  const selectCls = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500";
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {(["unread", "read", "all"] as TabKey[]).map((item) => (
+          <div className="flex gap-1.5">
+            {(["unread", "read", "all"] as TabKey[]).map((key) => (
               <button
-                key={item}
+                key={key}
                 type="button"
-                onClick={() => setTab(item)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${
-                  tab === item
-                    ? "bg-primary text-white"
-                    : "border border-slate-300 bg-white text-slate-700"
+                onClick={() => setTab(key)}
+                className={`rounded-lg px-3.5 py-2 text-xs font-semibold capitalize transition-colors ${
+                  tab === key
+                    ? "bg-primary-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                {item}
-                {item === "unread" ? ` (${unreadCount})` : ""}
+                {key}
+                {key === "unread" && unreadCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold">{unreadCount}</span>
+                )}
               </button>
             ))}
           </div>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={markAllAsRead}
-            disabled={loadingId === "all" || unreadCount === 0}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+            loading={loadingId === "all"}
+            disabled={unreadCount === 0}
           >
-            {loadingId === "all" ? "Saving..." : "Mark all as read"}
-          </button>
+            Mark all as read
+          </Button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <select
-            value={typeFilter}
-            onChange={(event) => setTypeFilter(event.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
-          >
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={selectCls}>
             <option value="all">All types</option>
-            {typeOptions.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
+            {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select
-            value={dateFilter}
-            onChange={(event) => setDateFilter(event.target.value as DateFilter)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs"
-          >
+          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value as DateFilter)} className={selectCls}>
             <option value="all">All dates</option>
             <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
           </select>
         </div>
-        {error ? <p className="mt-2 text-xs font-semibold text-red-600">{error}</p> : null}
+        <p className="mt-2 text-xs text-text-muted">
+          Showing <strong className="text-text-primary">{filteredNotifications.length}</strong> notifications
+        </p>
       </div>
 
-      {filteredNotifications.map((notification) => (
-        <article
-          key={notification.id}
-          className={`rounded-2xl border bg-white p-4 shadow-sm ${
-            notification.is_read ? "border-slate-200" : "border-primary/50"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-900">{notification.title}</h3>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
-                  {notification.notification_type}
-                </span>
-              </div>
-              <p className="text-sm text-slate-600">{notification.message}</p>
-              <p className="text-xs uppercase tracking-wide text-slate-500">
-                {notification.event_type} | {formatDateTime(notification.created_at)}
-              </p>
-              {notification.action_url ? (
-                <Link href={notification.action_url} className="text-xs font-semibold text-primary hover:underline">
-                  Open related record
-                </Link>
-              ) : null}
-            </div>
-            {!notification.is_read ? (
-              <button
-                type="button"
-                onClick={() => markRead(notification.id)}
-                disabled={loadingId === notification.id}
-                className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
-              >
-                {loadingId === notification.id ? "Saving..." : "Mark read"}
-              </button>
-            ) : null}
-          </div>
-        </article>
-      ))}
+      {/* List */}
       {filteredNotifications.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500 shadow-sm">
-          No notifications match your current filters.
+        <div className="rounded-xl border border-border bg-surface shadow-card">
+          <EmptyState
+            title="No notifications"
+            description="Notifications will appear here when your team assigns leads, completes follow-ups, or triggers workflow events."
+          />
         </div>
-      ) : null}
+      ) : (
+        <div className="space-y-2">
+          {filteredNotifications.map((n) => (
+            <article
+              key={n.id}
+              className={`rounded-xl border bg-surface p-4 shadow-card transition-colors hover:bg-slate-50/60 ${
+                n.is_read ? "border-border" : "border-primary-300 bg-primary-50/30"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm">
+                  {typeIcon(n.notification_type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-text-primary">{n.title}</h3>
+                    <Badge variant={typeVariant(n.notification_type)}>{n.notification_type}</Badge>
+                    {!n.is_read && <span className="h-2 w-2 rounded-full bg-primary-500" title="Unread" />}
+                  </div>
+                  <p className="mt-0.5 text-sm text-text-secondary">{n.message}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                    <span className="text-[11px] text-text-disabled">{fmt(n.created_at)}</span>
+                    <span className="text-[11px] text-text-disabled">·</span>
+                    <span className="text-[11px] font-mono text-text-disabled">{n.event_type}</span>
+                    {n.action_url && (
+                      <Link href={n.action_url} className="text-[11px] font-semibold text-primary-600 hover:underline">
+                        View →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+                {!n.is_read && (
+                  <button
+                    type="button"
+                    onClick={() => markRead(n.id)}
+                    disabled={loadingId === n.id}
+                    className="flex-shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                  >
+                    {loadingId === n.id ? "…" : "Mark read"}
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

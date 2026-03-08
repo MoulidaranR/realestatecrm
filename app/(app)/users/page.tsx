@@ -3,6 +3,7 @@ import { UsersPageClient } from "@/components/users-page-client";
 import type { UserProfile } from "@/lib/db-types";
 import { getActorContext, requireCompanyAdmin } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function UsersPage() {
   const actor = await getActorContext();
@@ -21,12 +22,11 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Users</h1>
-        <p className="text-sm text-slate-500">
-          Manage your team — add users, assign roles, set managers, and activate or deactivate accounts.
-        </p>
-      </div>
+      <PageHeader
+        title="Users"
+        subtitle="Manage your team — add users, assign roles, set managers, and activate or deactivate accounts."
+        breadcrumbs={[{ label: "Management" }, { label: "Users" }]}
+      />
       <UsersPageClient users={(users ?? []) as UserProfile[]} />
     </div>
   );
