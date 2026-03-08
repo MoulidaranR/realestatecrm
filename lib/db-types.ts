@@ -11,9 +11,11 @@ export type UserProfile = {
   phone: string | null;
   role_key: RoleKey;
   manager_user_id: string | null;
+  invited_by: string | null;
+  invited_at: string | null;
   status: UserStatus;
   created_at: string;
-  last_active_at: string;
+  last_active_at: string | null;
 };
 
 export type Company = {

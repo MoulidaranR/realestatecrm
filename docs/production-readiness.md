@@ -10,6 +10,9 @@
   - `supabase/migrations/202603060001_phase1_init.sql`
   - `supabase/migrations/202603060002_phase2_core_modules.sql`
   - `supabase/migrations/202603060003_phase3_to_phase5_features.sql`
+  - `supabase/migrations/202603060004_performance_indexes.sql`
+  - `supabase/migrations/202603070001_crm_product_upgrade.sql`
+  - `supabase/migrations/202603070002_restore_users_management.sql`
 - Validate RLS policies per role in staging.
 - Validate backup strategy and restoration process.
 

@@ -7,7 +7,7 @@ type InviteUserFormProps = {
   onCreated: () => void;
 };
 
-const ROLE_OPTIONS: RoleKey[] = ["manager", "sales_executive", "view_only"];
+const ROLE_OPTIONS: RoleKey[] = ["company_admin", "manager", "sales_executive", "view_only"];
 
 export function InviteUserForm({ onCreated }: InviteUserFormProps) {
   const [fullName, setFullName] = useState("");
@@ -50,7 +50,12 @@ export function InviteUserForm({ onCreated }: InviteUserFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Invite Team Member</h3>
+      <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
+        Add User (Invite-Only)
+      </h3>
+      <p className="text-xs text-slate-500">
+        Employee onboarding is invite-only. They can activate accounts from the invite link.
+      </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <input
           placeholder="Full name"
@@ -91,7 +96,7 @@ export function InviteUserForm({ onCreated }: InviteUserFormProps) {
           type="submit"
           className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {loading ? "Sending..." : "Send invite"}
+          {loading ? "Sending..." : "Add & Send Invite"}
         </button>
         {error ? <span className="text-xs font-semibold text-red-600">{error}</span> : null}
         {success ? <span className="text-xs font-semibold text-emerald-600">{success}</span> : null}

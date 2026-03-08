@@ -83,8 +83,7 @@ export async function POST(request: Request) {
       full_name: fullName,
       email,
       role_key: "company_admin",
-      status: "active",
-      last_active_at: new Date().toISOString()
+      status: "active"
     });
 
     if (profileError) {

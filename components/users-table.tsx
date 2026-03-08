@@ -6,7 +6,6 @@ import type { UserProfile } from "@/lib/db-types";
 
 type UsersTableProps = {
   initialUsers: UserProfile[];
-  managerOptions: Array<Pick<UserProfile, "id" | "full_name" | "role_key">>;
 };
 
 const ROLE_OPTIONS: RoleKey[] = [
@@ -52,26 +51,56 @@ function statusBadge(status: UserProfile["status"]): string {
   return "bg-amber-100 text-amber-700";
 }
 
-export function UsersTable({ initialUsers, managerOptions }: UsersTableProps) {
+function normalizePhone(value: string | null): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function UsersTable({ initialUsers }: UsersTableProps) {
   const [users, setUsers] = useState(initialUsers);
+  const [baseline, setBaseline] = useState(
+    Object.fromEntries(
+      initialUsers.map((user) => [
+        user.id,
+        {
+          full_name: user.full_name,
+          phone: normalizePhone(user.phone)
+        }
+      ])
+    ) as Record<string, { full_name: string; phone: string | null }>
+  );
   const [loadingId, setLoadingId] = useState<string>("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.full_name.localeCompare(b.full_name)),
     [users]
   );
   const userNameMap = useMemo(() => new Map(users.map((user) => [user.id, user.full_name])), [users]);
+  const managerOptions = useMemo(
+    () =>
+      [...users]
+        .filter(
+          (user) =>
+            user.status === "active" &&
+            (user.role_key === "company_admin" || user.role_key === "manager")
+        )
+        .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    [users]
+  );
 
   async function patchUser(
     userId: string,
-    endpoint: "role" | "status" | "manager",
+    endpoint: "" | "role" | "status" | "manager",
     body: Record<string, unknown>,
     onSuccess: () => void
   ) {
     setLoadingId(userId);
     setError("");
-    const response = await fetch(`/api/users/${userId}/${endpoint}`, {
+    setSuccess("");
+    const path = endpoint ? `/api/users/${userId}/${endpoint}` : `/api/users/${userId}`;
+    const response = await fetch(path, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -83,6 +112,7 @@ export function UsersTable({ initialUsers, managerOptions }: UsersTableProps) {
       return;
     }
     onSuccess();
+    setSuccess("User updated.");
     setLoadingId("");
   }
 
@@ -96,11 +126,42 @@ export function UsersTable({ initialUsers, managerOptions }: UsersTableProps) {
     return activeAdmins.length <= 1;
   }
 
+  function hasProfileChanges(user: UserProfile): boolean {
+    const original = baseline[user.id];
+    if (!original) {
+      return true;
+    }
+    return (
+      original.full_name !== user.full_name ||
+      normalizePhone(original.phone) !== normalizePhone(user.phone)
+    );
+  }
+
+  function saveUserProfile(user: UserProfile) {
+    patchUser(
+      user.id,
+      "",
+      {
+        fullName: user.full_name,
+        phone: normalizePhone(user.phone)
+      },
+      () =>
+        setBaseline((prev) => ({
+          ...prev,
+          [user.id]: {
+            full_name: user.full_name,
+            phone: normalizePhone(user.phone)
+          }
+        }))
+    );
+  }
+
   return (
     <div className="space-y-3">
       {error ? <p className="text-sm font-semibold text-red-600">{error}</p> : null}
+      {success ? <p className="text-sm font-semibold text-emerald-600">{success}</p> : null}
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-[1100px] text-left text-sm">
+        <table className="min-w-[1300px] text-left text-sm">
           <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -110,26 +171,60 @@ export function UsersTable({ initialUsers, managerOptions }: UsersTableProps) {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Manager</th>
               <th className="px-4 py-3">Created</th>
+              <th className="px-4 py-3">Invited</th>
               <th className="px-4 py-3">Last Active</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sortedUsers.map((user) => {
               const lockAdmin = isLastActiveCompanyAdmin(user);
+              const pendingProfileSave = hasProfileChanges(user);
+              const editableRole: RoleKey =
+                user.role_key === "telecaller" ? "sales_executive" : user.role_key;
               return (
                 <tr key={user.id} className="border-b border-slate-100">
-                  <td className="px-4 py-3 font-medium text-slate-800">{user.full_name}</td>
+                  <td className="px-4 py-3">
+                    <input
+                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                      value={user.full_name}
+                      onChange={(event) =>
+                        setUsers((prev) =>
+                          prev.map((item) =>
+                            item.id === user.id ? { ...item, full_name: event.target.value } : item
+                          )
+                        )
+                      }
+                      disabled={loadingId === user.id}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{user.email}</td>
-                  <td className="px-4 py-3 text-slate-600">{user.phone ?? "-"}</td>
+                  <td className="px-4 py-3">
+                    <input
+                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                      value={user.phone ?? ""}
+                      placeholder="Phone"
+                      onChange={(event) =>
+                        setUsers((prev) =>
+                          prev.map((item) =>
+                            item.id === user.id
+                              ? { ...item, phone: event.target.value || null }
+                              : item
+                          )
+                        )
+                      }
+                      disabled={loadingId === user.id}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="space-y-2">
                       <span
                         className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${roleBadge(user.role_key)}`}
                       >
-                        {user.role_key}
+                        {editableRole}
                       </span>
                       <select
-                        value={user.role_key}
+                        value={editableRole}
                         onChange={(event) =>
                           patchUser(
                             user.id,
@@ -228,13 +323,24 @@ export function UsersTable({ initialUsers, managerOptions }: UsersTableProps) {
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatDateTime(user.created_at)}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatDateTime(user.invited_at)}</td>
                   <td className="px-4 py-3 text-slate-600">{formatDateTime(user.last_active_at)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => saveUserProfile(user)}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={loadingId === user.id || !pendingProfileSave}
+                    >
+                      {loadingId === user.id ? "Saving..." : "Save Details"}
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {sortedUsers.length === 0 ? (
               <tr>
-                <td className="px-4 py-8 text-center text-slate-500" colSpan={8}>
+                <td className="px-4 py-8 text-center text-slate-500" colSpan={10}>
                   No users found in this workspace.
                 </td>
               </tr>

@@ -12,6 +12,10 @@ export type ActorContext = {
   profile: UserProfile;
 };
 
+function isCompanyAdminRole(roleKey: string): boolean {
+  return roleKey.toLowerCase() === "company_admin";
+}
+
 const getActorContextCached = cache(async (): Promise<ActorContext> => {
   const supabase = await createServerSupabaseClient();
   const {
@@ -33,12 +37,6 @@ const getActorContextCached = cache(async (): Promise<ActorContext> => {
     throw new Error("User profile not found");
   }
 
-  await supabase
-    .from("user_profiles")
-    .update({ last_active_at: new Date().toISOString() })
-    .eq("id", profile.id)
-    .eq("company_id", profile.company_id);
-
   return {
     userId: user.id,
     email: user.email,
@@ -51,7 +49,7 @@ export async function getActorContext(): Promise<ActorContext> {
 }
 
 export function requireCompanyAdmin(actor: ActorContext): void {
-  if (actor.profile.role_key !== "company_admin") {
+  if (!isCompanyAdminRole(actor.profile.role_key)) {
     throw new Error("Forbidden");
   }
 }
@@ -74,7 +72,7 @@ export async function hasPermission(
   roleKey: RoleKey,
   permissionKey: PermissionKey
 ): Promise<boolean> {
-  if (roleKey === "company_admin") {
+  if (isCompanyAdminRole(roleKey)) {
     return true;
   }
 

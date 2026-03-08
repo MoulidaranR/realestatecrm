@@ -47,8 +47,7 @@ export async function POST(request: Request) {
     .update({
       auth_user_id: user.id,
       full_name: fullName,
-      status: "active",
-      last_active_at: new Date().toISOString()
+      status: "active"
     })
     .eq("id", targetProfileId);
 
