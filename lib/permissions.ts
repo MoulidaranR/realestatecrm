@@ -1,22 +1,29 @@
-import type { PermissionKey, RoleKey } from "@/lib/constants";
+import type { PermissionKey, RoleKey, SystemRoleKey } from "@/lib/constants";
 
-type RolePermissionMap = Record<RoleKey, PermissionKey[]>;
+type SystemRolePermissionMap = Record<SystemRoleKey, PermissionKey[]>;
 
-export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
+export const DEFAULT_ROLE_PERMISSIONS: SystemRolePermissionMap = {
   company_admin: [
     "dashboard.view",
     "users.read",
     "users.invite",
+    "users.manage",
     "users.update_role",
     "users.update_status",
     "users.update_manager",
+    "roles.manage",
+    "settings.manage",
     "leads.read",
     "leads.create",
     "leads.update",
     "leads.assign",
+    "leads.delete",
+    "leads.export",
     "followups.read",
+    "followups.create",
     "followups.manage",
     "site_visits.read",
+    "site_visits.create",
     "site_visits.manage",
     "reports.view",
     "reports.export",
@@ -27,13 +34,18 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
   ],
   manager: [
     "dashboard.view",
+    "users.read",
+    "users.update_manager",
     "leads.read",
     "leads.create",
     "leads.update",
     "leads.assign",
+    "leads.export",
     "followups.read",
+    "followups.create",
     "followups.manage",
     "site_visits.read",
+    "site_visits.create",
     "site_visits.manage",
     "reports.view",
     "reports.export",
@@ -45,11 +57,25 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
   sales_executive: [
     "dashboard.view",
     "leads.read",
+    "leads.create",
     "leads.update",
     "followups.read",
+    "followups.create",
     "site_visits.read",
+    "site_visits.create",
     "site_visits.manage",
     "reports.view",
+    "notifications.read"
+  ],
+  telecaller: [
+    "dashboard.view",
+    "leads.read",
+    "leads.create",
+    "leads.update",
+    "followups.read",
+    "followups.create",
+    "followups.manage",
+    "site_visits.read",
     "notifications.read"
   ],
   view_only: [
@@ -60,19 +86,11 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissionMap = {
     "reports.view",
     "notifications.read",
     "activity_logs.view"
-  ],
-  telecaller: [
-    "dashboard.view",
-    "leads.read",
-    "leads.update",
-    "followups.read",
-    "site_visits.read",
-    "site_visits.manage",
-    "reports.view",
-    "notifications.read"
   ]
 };
 
 export function hasDefaultPermission(role: RoleKey, permission: PermissionKey): boolean {
-  return DEFAULT_ROLE_PERMISSIONS[role].includes(permission);
+  const perms = DEFAULT_ROLE_PERMISSIONS[role as SystemRoleKey];
+  if (!perms) return false;
+  return perms.includes(permission);
 }

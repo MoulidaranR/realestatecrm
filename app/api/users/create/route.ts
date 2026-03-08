@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { MANAGED_ROLE_KEYS, type RoleKey } from "@/lib/constants";
-import { getActorContext, requireCompanyAdmin, requirePermission } from "@/lib/auth";
+import { getActorContext, requireCompanyAdmin } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
 import { createNotification } from "@/lib/notifications";
@@ -13,7 +12,6 @@ function isValidPhone(value: string): boolean {
 export async function POST(request: Request) {
   try {
     const actor = await getActorContext();
-    await requirePermission(actor, "users.invite");
     requireCompanyAdmin(actor);
 
     const payload = (await request.json()) as {
@@ -21,7 +19,7 @@ export async function POST(request: Request) {
       email?: string;
       phone?: string;
       password?: string;
-      roleKey?: RoleKey;
+      roleKey?: string;
       managerUserId?: string | null;
     };
 
@@ -29,32 +27,44 @@ export async function POST(request: Request) {
     const email = payload.email?.trim().toLowerCase();
     const phone = payload.phone?.trim() || null;
     const password = payload.password;
-    const roleKey = payload.roleKey;
+    const roleKey = payload.roleKey?.trim();
     const managerUserId = payload.managerUserId ?? null;
 
     if (!fullName || !email || !roleKey || !password) {
       return NextResponse.json(
-        { error: "Full name, email, password, and role are required" },
+        { error: "Full name, email, password, and role are required." },
         { status: 400 }
       );
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
     if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
     }
     if (phone && !isValidPhone(phone)) {
-      return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
-    }
-    if (!MANAGED_ROLE_KEYS.includes(roleKey)) {
-      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid phone number." }, { status: 400 });
     }
 
     const admin = createAdminSupabaseClient();
+
+    // Validate role exists (system or company custom)
+    const { data: role } = await admin
+      .from("roles")
+      .select("role_key, role_name, company_id")
+      .eq("role_key", roleKey)
+      .maybeSingle();
+
+    if (!role) {
+      return NextResponse.json(
+        { error: `Role "${roleKey}" does not exist. Please refresh and try again.` },
+        { status: 400 }
+      );
+    }
+    // Custom role must belong to this company
+    if (role.company_id && role.company_id !== actor.profile.company_id) {
+      return NextResponse.json({ error: "Invalid role for this company." }, { status: 400 });
+    }
 
     // Check duplicate email in same company
     const { data: existingProfile } = await admin
@@ -66,7 +76,9 @@ export async function POST(request: Request) {
 
     if (existingProfile) {
       return NextResponse.json(
-        { error: `A user with email ${email} already exists in this company (status: ${existingProfile.status})` },
+        {
+          error: `Email "${email}" is already used by another account in this company (status: ${existingProfile.status}).`
+        },
         { status: 400 }
       );
     }
@@ -75,18 +87,18 @@ export async function POST(request: Request) {
     if (managerUserId) {
       const { data: manager } = await admin
         .from("user_profiles")
-        .select("id, company_id, status, role_key")
+        .select("id, company_id, status")
         .eq("id", managerUserId)
         .single();
       if (!manager || manager.company_id !== actor.profile.company_id) {
-        return NextResponse.json({ error: "Invalid manager" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid manager selected." }, { status: 400 });
       }
       if (manager.status !== "active") {
-        return NextResponse.json({ error: "Manager must be active" }, { status: 400 });
+        return NextResponse.json({ error: "Reporting manager must be active." }, { status: 400 });
       }
     }
 
-    // Create Supabase auth user directly (no email invite needed)
+    // Create Supabase auth user with confirmed email
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email,
       password,
@@ -96,7 +108,7 @@ export async function POST(request: Request) {
 
     if (authError || !authData.user) {
       return NextResponse.json(
-        { error: authError?.message ?? "Failed to create auth account" },
+        { error: authError?.message ?? "Failed to create auth account." },
         { status: 400 }
       );
     }
@@ -121,7 +133,7 @@ export async function POST(request: Request) {
       // Rollback auth user
       await admin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json(
-        { error: profileError?.message ?? "Failed to create user profile" },
+        { error: profileError?.message ?? "Failed to create user profile." },
         { status: 400 }
       );
     }
@@ -132,14 +144,8 @@ export async function POST(request: Request) {
       entityType: "user",
       entityId: profile.id,
       action: "user.created",
-      description: `Created user ${fullName} (${email}) as ${roleKey}`,
-      after: {
-        fullName,
-        email,
-        roleKey,
-        managerUserId,
-        status: "active"
-      }
+      description: `Created user ${fullName} (${email}) as ${role.role_name}`,
+      after: { fullName, email, roleKey, managerUserId, status: "active" }
     });
 
     await createNotification(admin, {
@@ -151,7 +157,7 @@ export async function POST(request: Request) {
       entityId: profile.id,
       actionUrl: "/users",
       title: "Welcome to the CRM",
-      message: `Your account has been created by ${actor.profile.full_name}. You can sign in with your email and password.`
+      message: `Your account has been created by ${actor.profile.full_name}. Sign in with your email and password.`
     });
 
     return NextResponse.json({ success: true, id: profile.id });

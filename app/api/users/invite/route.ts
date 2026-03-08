@@ -1,66 +1,81 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
-import { MANAGED_ROLE_KEYS, type RoleKey } from "@/lib/constants";
-import { getActorContext, requireCompanyAdmin, requirePermission } from "@/lib/auth";
+import { getActorContext, requireCompanyAdmin } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
-
-function isValidPhone(value: string): boolean {
-  const normalized = value.replace(/[^\d+]/g, "");
-  return normalized.length >= 8 && normalized.length <= 16;
-}
 
 export async function POST(request: Request) {
   try {
     const actor = await getActorContext();
-    await requirePermission(actor, "users.invite");
     requireCompanyAdmin(actor);
 
     const payload = (await request.json()) as {
-      fullName?: string;
       email?: string;
-      phone?: string;
-      roleKey?: RoleKey;
+      roleKey?: string;
+      managerUserId?: string | null;
     };
 
-    const fullName = payload.fullName?.trim();
     const email = payload.email?.trim().toLowerCase();
-    const phone = payload.phone?.trim() || null;
-    const roleKey = payload.roleKey;
+    const roleKey = payload.roleKey?.trim();
+    const managerUserId = payload.managerUserId ?? null;
 
-    if (!fullName || !email || !roleKey) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!email || !roleKey) {
+      return NextResponse.json({ error: "Email and role are required." }, { status: 400 });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
-    }
-    if (phone && !isValidPhone(phone)) {
-      return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
-    }
-    if (!MANAGED_ROLE_KEYS.includes(roleKey)) {
-      return NextResponse.json({ error: "Invalid role key" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
 
     const admin = createAdminSupabaseClient();
+
+    // Validate role exists (system or company custom)
+    const { data: role } = await admin
+      .from("roles")
+      .select("role_key, role_name, company_id")
+      .eq("role_key", roleKey)
+      .maybeSingle();
+
+    if (!role) {
+      return NextResponse.json(
+        { error: `Role "${roleKey}" does not exist. Please refresh and try again.` },
+        { status: 400 }
+      );
+    }
+    if (role.company_id && role.company_id !== actor.profile.company_id) {
+      return NextResponse.json({ error: "Invalid role for this company." }, { status: 400 });
+    }
+
+    // Check duplicate in same company
     const { data: existingProfile } = await admin
       .from("user_profiles")
-      .select("id, status, role_key, full_name, phone")
+      .select("id, status, role_key, full_name")
       .eq("company_id", actor.profile.company_id)
       .eq("email", email)
       .maybeSingle();
 
     if (existingProfile?.status === "active") {
       return NextResponse.json(
-        { error: "User already active in this company. Edit the user instead." },
+        { error: `"${email}" is already an active user in this company.` },
         { status: 400 }
       );
     }
 
+    // Validate manager if provided
+    if (managerUserId) {
+      const { data: manager } = await admin
+        .from("user_profiles")
+        .select("id, company_id, status")
+        .eq("id", managerUserId)
+        .single();
+      if (!manager || manager.company_id !== actor.profile.company_id || manager.status !== "active") {
+        return NextResponse.json({ error: "Invalid or inactive manager selected." }, { status: 400 });
+      }
+    }
+
+    // Send Supabase invite email
     const { data: invitedUser, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
       email,
-      {
-        redirectTo: `${env.NEXT_PUBLIC_APP_URL}/invite/accept`
-      }
+      { redirectTo: `${env.NEXT_PUBLIC_APP_URL}/invite/accept` }
     );
 
     if (inviteError) {
@@ -68,21 +83,23 @@ export async function POST(request: Request) {
     }
 
     const invitedAt = new Date().toISOString();
+
+    // Upsert user profile
     const { data: profile, error: upsertError } = await admin
       .from("user_profiles")
       .upsert(
         {
           auth_user_id: invitedUser.user?.id ?? null,
           company_id: actor.profile.company_id,
-          full_name: fullName,
+          full_name: email.split("@")[0], // placeholder until user sets it
           email,
-          phone,
           role_key: roleKey,
-          status: "invited"
+          manager_user_id: managerUserId,
+          status: "invited",
+          invited_by: actor.profile.id,
+          invited_at: invitedAt
         },
-        {
-          onConflict: "company_id,email"
-        }
+        { onConflict: "company_id,email" }
       )
       .select("id")
       .single();
@@ -95,24 +112,10 @@ export async function POST(request: Request) {
       companyId: actor.profile.company_id,
       actorUserId: actor.profile.id,
       entityType: "user",
-      entityId: profile?.id ?? null,
+      entityId: profile?.id ?? "",
       action: "user.invited",
-      description: `Invited ${email} as ${roleKey}`,
-      before: existingProfile
-        ? {
-            status: existingProfile.status,
-            roleKey: existingProfile.role_key,
-            fullName: existingProfile.full_name,
-            phone: existingProfile.phone
-          }
-        : {},
-      after: {
-        status: "invited",
-        roleKey,
-        fullName,
-        phone,
-        invitedAt
-      }
+      description: `Invited ${email} as ${role.role_name}`,
+      after: { email, roleKey, managerUserId, status: "invited", invitedAt }
     });
 
     return NextResponse.json({ success: true });

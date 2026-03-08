@@ -1,81 +1,106 @@
 import { NextResponse } from "next/server";
 import { getActorContext, requireCompanyAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { PERMISSION_KEYS } from "@/lib/constants";
-import { mapDbError } from "@/lib/errors";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
-type Context = { params: Promise<{ roleKey: string }> };
+type Params = { params: Promise<{ roleKey: string }> };
 
-export async function GET(_req: Request, { params }: Context) {
+// GET /api/roles/[roleKey]/permissions
+export async function GET(_req: Request, { params }: Params) {
   try {
     const actor = await getActorContext();
     requireCompanyAdmin(actor);
     const { roleKey } = await params;
+
     const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase
-      .from("role_permissions")
-      .select("permission_key")
-      .eq("role_key", roleKey);
-    if (error) return NextResponse.json({ error: mapDbError(error, "GET role permissions") }, { status: 500 });
-    return NextResponse.json({ permissionKeys: (data ?? []).map((p) => p.permission_key) });
-  } catch (err) {
-    if (err instanceof Error && err.message === "Forbidden") {
-      return NextResponse.json({ error: "Access denied." }, { status: 403 });
+
+    const [{ data: allPerms }, { data: grantedPerms }, { data: role }] = await Promise.all([
+      supabase.from("permissions").select("permission_key, description").order("permission_key"),
+      supabase.from("role_permissions").select("permission_key").eq("role_key", roleKey),
+      supabase.from("roles").select("role_key, role_name, is_system, is_protected, scope, description").eq("role_key", roleKey).maybeSingle()
+    ]);
+
+    if (!role) {
+      return NextResponse.json({ error: "Role not found." }, { status: 404 });
     }
-    return NextResponse.json({ error: mapDbError(err, "GET role permissions") }, { status: 500 });
+
+    return NextResponse.json({
+      allPermissions: allPerms ?? [],
+      grantedKeys: (grantedPerms ?? []).map((p) => p.permission_key),
+      role
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 403 });
   }
 }
 
-export async function PUT(req: Request, { params }: Context) {
+// PUT /api/roles/[roleKey]/permissions
+export async function PUT(request: Request, { params }: Params) {
   try {
     const actor = await getActorContext();
     requireCompanyAdmin(actor);
-
     const { roleKey } = await params;
-    if (roleKey === "company_admin") {
+
+    const body = (await request.json()) as {
+      permissionKeys?: string[];
+      scope?: string;
+    };
+
+    const admin = createAdminSupabaseClient();
+
+    // Fetch role to enforce protection rules
+    const { data: role } = await admin
+      .from("roles")
+      .select("role_key, role_name, is_protected, company_id")
+      .eq("role_key", roleKey)
+      .maybeSingle();
+
+    if (!role) {
+      return NextResponse.json({ error: "This role no longer exists. Please refresh and try again." }, { status: 404 });
+    }
+
+    if (role.is_protected) {
       return NextResponse.json(
-        { error: "Company Admin permissions cannot be modified." },
-        { status: 400 }
+        { error: `The "${role.role_name}" role is protected. Its permissions cannot be restricted.` },
+        { status: 403 }
       );
     }
 
-    const body = (await req.json()) as { permissionKeys?: string[] };
-    const permissionKeys = (body.permissionKeys ?? []).filter(
-      (k): k is (typeof PERMISSION_KEYS)[number] => PERMISSION_KEYS.includes(k as never)
-    );
-
-    const supabase = await createServerSupabaseClient();
-
-    // Verify role exists
-    const { data: role } = await supabase
-      .from("roles")
-      .select("role_key")
-      .eq("role_key", roleKey)
-      .single();
-    if (!role) return NextResponse.json({ error: "Role not found." }, { status: 404 });
-
-    // Replace all permissions for this role
-    const { error: deleteError } = await supabase
-      .from("role_permissions")
-      .delete()
-      .eq("role_key", roleKey);
-    if (deleteError) {
-      return NextResponse.json({ error: mapDbError(deleteError, "delete role permissions") }, { status: 500 });
+    // Custom roles must belong to this company
+    if (role.company_id && role.company_id !== actor.profile.company_id) {
+      return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
 
-    if (permissionKeys.length > 0) {
-      const rows = permissionKeys.map((pk) => ({ role_key: roleKey, permission_key: pk }));
-      const { error: insertError } = await supabase.from("role_permissions").insert(rows);
-      if (insertError) {
-        return NextResponse.json({ error: mapDbError(insertError, "insert role permissions") }, { status: 500 });
+    // Update scope if provided
+    if (body.scope) {
+      await admin.from("roles").update({ scope: body.scope }).eq("role_key", roleKey);
+    }
+
+    // Replace permissions atomically
+    if (body.permissionKeys !== undefined) {
+      await admin.from("role_permissions").delete().eq("role_key", roleKey);
+
+      if (body.permissionKeys.length > 0) {
+        // Validate all provided keys exist
+        const { data: validPerms } = await admin
+          .from("permissions")
+          .select("permission_key")
+          .in("permission_key", body.permissionKeys);
+
+        const validKeys = (validPerms ?? []).map((p) => p.permission_key);
+
+        if (validKeys.length > 0) {
+          await admin.from("role_permissions").insert(
+            validKeys.map((pk) => ({ role_key: roleKey, permission_key: pk }))
+          );
+        }
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    if (err instanceof Error && err.message === "Forbidden") {
-      return NextResponse.json({ error: "Access denied." }, { status: 403 });
-    }
-    return NextResponse.json({ error: mapDbError(err, "PUT role permissions") }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Unexpected error";
+    return NextResponse.json({ error: msg }, { status: msg === "Unauthorized" ? 401 : 403 });
   }
 }

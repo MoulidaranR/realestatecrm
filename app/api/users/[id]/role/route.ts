@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { MANAGED_ROLE_KEYS, type RoleKey } from "@/lib/constants";
 import { getActorContext, requireCompanyAdmin, requirePermission } from "@/lib/auth";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logActivity } from "@/lib/activity";
@@ -18,13 +17,31 @@ export async function PATCH(request: Request, context: RouteContext) {
     requireCompanyAdmin(actor);
     const { id } = await context.params;
 
-    const payload = (await request.json()) as { roleKey?: RoleKey };
-    const roleKey = payload.roleKey;
-    if (!roleKey || !MANAGED_ROLE_KEYS.includes(roleKey)) {
-      return NextResponse.json({ error: "Invalid role key" }, { status: 400 });
+    const payload = (await request.json()) as { roleKey?: string };
+    const roleKey = payload.roleKey?.trim();
+    if (!roleKey) {
+      return NextResponse.json({ error: "Role key is required." }, { status: 400 });
     }
 
     const admin = createAdminSupabaseClient();
+
+    // Validate role exists in DB (system or custom for this company)
+    const { data: role } = await admin
+      .from("roles")
+      .select("role_key, role_name, company_id")
+      .eq("role_key", roleKey)
+      .maybeSingle();
+
+    if (!role) {
+      return NextResponse.json(
+        { error: `Role "${roleKey}" does not exist. Please refresh and try again.` },
+        { status: 400 }
+      );
+    }
+    if (role.company_id && role.company_id !== actor.profile.company_id) {
+      return NextResponse.json({ error: "Invalid role for this company." }, { status: 400 });
+    }
+
     const { data: target, error: targetError } = await admin
       .from("user_profiles")
       .select("id, company_id, role_key, status, full_name")
@@ -68,7 +85,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       entityType: "user",
       entityId: id,
       action: "user.role_changed",
-      description: `${target.full_name} role updated to ${roleKey}`,
+      description: `${target.full_name} role updated to ${role.role_name}`,
       before: {
         roleKey: target.role_key
       },
@@ -86,7 +103,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       entityId: id,
       actionUrl: "/users",
       title: "Role updated",
-      message: `Your role has been updated to ${roleKey}.`
+      message: `Your role has been updated to ${role.role_name}.`
     });
 
     return NextResponse.json({ success: true });

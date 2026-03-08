@@ -14,9 +14,11 @@ export type UserProfile = {
   invited_by: string | null;
   invited_at: string | null;
   status: UserStatus;
+  access_mode: "role_only" | "custom_override";
   created_at: string;
   last_active_at: string | null;
 };
+
 
 export type Company = {
   id: string;

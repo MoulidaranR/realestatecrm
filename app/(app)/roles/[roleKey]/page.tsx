@@ -18,16 +18,37 @@ export default async function RoleDetailPage({
 
   const supabase = await createServerSupabaseClient();
 
-
-  const [{ data: role }, { data: allPerms }, { data: grantedPerms }] = await Promise.all([
-    supabase.from("roles").select("role_key, role_name").eq("role_key", roleKey).single(),
+  const [
+    { data: role },
+    { data: allPerms },
+    { data: grantedPerms },
+    { data: allRoles },
+    { data: userCounts }
+  ] = await Promise.all([
+    supabase
+      .from("roles")
+      .select("role_key, role_name, is_system, is_protected, scope, description")
+      .eq("role_key", roleKey)
+      .single(),
     supabase.from("permissions").select("permission_key, description").order("permission_key"),
-    supabase.from("role_permissions").select("permission_key").eq("role_key", roleKey)
+    supabase.from("role_permissions").select("permission_key").eq("role_key", roleKey),
+    supabase
+      .from("roles")
+      .select("role_key, role_name")
+      .or(`company_id.is.null,company_id.eq.${actor.profile.company_id}`)
+      .order("role_name"),
+    supabase
+      .from("user_profiles")
+      .select("role_key")
+      .eq("company_id", actor.profile.company_id)
+      .eq("role_key", roleKey)
+      .eq("status", "active")
   ]);
 
   if (!role) notFound();
 
   const grantedKeys = (grantedPerms ?? []).map((p) => p.permission_key);
+  const userCount = userCounts?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -49,10 +70,18 @@ export default async function RoleDetailPage({
         }
       />
       <RolePermissionsClient
-        roleKey={roleKey}
-        roleName={role.role_name}
+        role={{
+          role_key: role.role_key,
+          role_name: role.role_name,
+          is_system: role.is_system ?? false,
+          is_protected: role.is_protected ?? false,
+          scope: role.scope ?? "company",
+          description: role.description ?? ""
+        }}
         allPermissions={allPerms ?? []}
         grantedKeys={grantedKeys}
+        userCount={userCount}
+        allRoles={(allRoles ?? []).filter((r) => r.role_key !== roleKey)}
       />
     </div>
   );
